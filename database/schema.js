@@ -232,4 +232,72 @@ CREATE INDEX IF NOT EXISTS idx_campaign_groups_campaign ON campaign_groups(campa
 CREATE INDEX IF NOT EXISTS idx_inbox_chat ON inbox_messages(session_id, chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS public_whatsapp_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_name TEXT NOT NULL DEFAULT '',
+  city TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'سایر',
+  whatsapp_url TEXT NOT NULL,
+  normalized_url TEXT NOT NULL UNIQUE,
+  source_url TEXT,
+  source_type TEXT NOT NULL DEFAULT 'search_engine',
+  description TEXT NOT NULL DEFAULT '',
+  image_url TEXT,
+  status TEXT NOT NULL DEFAULT 'unknown',
+  http_status INTEGER,
+  joined_status TEXT NOT NULL DEFAULT 'unknown',
+  notes TEXT NOT NULL DEFAULT '',
+  discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
+  last_checked_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS group_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL,
+  source_type TEXT NOT NULL,
+  source_website TEXT,
+  source_url TEXT,
+  search_query TEXT,
+  title TEXT,
+  city TEXT,
+  discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (group_id) REFERENCES public_whatsapp_groups(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS public_search_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scan_id INTEGER,
+  url TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  source_website TEXT,
+  search_query TEXT,
+  city TEXT,
+  http_status INTEGER,
+  link_type TEXT NOT NULL DEFAULT 'webpage',
+  discovered_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS public_group_scans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'running',
+  cities TEXT NOT NULL DEFAULT '',
+  queries_count INTEGER NOT NULL DEFAULT 0,
+  results_count INTEGER NOT NULL DEFAULT 0,
+  whatsapp_links INTEGER NOT NULL DEFAULT 0,
+  new_links INTEGER NOT NULL DEFAULT 0,
+  duplicates INTEGER NOT NULL DEFAULT 0,
+  invalid_links INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  progress_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_public_groups_city ON public_whatsapp_groups(city);
+CREATE INDEX IF NOT EXISTS idx_public_groups_status ON public_whatsapp_groups(status);
+CREATE INDEX IF NOT EXISTS idx_group_sources_group ON group_sources(group_id);
 `;

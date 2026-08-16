@@ -22,8 +22,13 @@ const STATUS_FA = {
   sent: "ارسال‌شده",
   failed: "ناموفق",
   skipped: "ردشده",
-  pending: "در انتظار"
-};
+  valid: "معتبر",
+  invalid: "نامعتبر",
+  unavailable: "غیرقابل دسترس",
+  unknown: "نامشخص",
+  joined: "عضو",
+  not_joined: "عضو نیست",
+  already_joined: "قبلاً عضو",
 
 export function statusFa(s) {
   return STATUS_FA[s] || s;

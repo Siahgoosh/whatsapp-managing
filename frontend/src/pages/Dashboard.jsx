@@ -48,7 +48,33 @@ export function Dashboard() {
           کمپین فعال
           <b>{s.active ?? "—"}</b>
         </div>
+        <div className="card stat">
+          گروه‌های عمومی
+          <b>{s.finder?.groupsFound ?? "—"}</b>
+        </div>
+        <div className="card stat">
+          لینک معتبر
+          <b>{s.finder?.validLinks ?? "—"}</b>
+        </div>
+        <div className="card stat">
+          قبلاً عضو
+          <b>{s.finder?.alreadyJoined ?? "—"}</b>
+        </div>
       </div>
+      {s.finder && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>آمار جستجوی گروه عمومی</h3>
+          <div className="row">
+            <span className="badge">Cities Scanned: {s.finder.citiesScanned}</span>
+            <span className="badge">Groups Found: {s.finder.groupsFound}</span>
+            <span className="badge ok">Valid: {s.finder.validLinks}</span>
+            <span className="badge danger">Invalid: {s.finder.invalidLinks}</span>
+            <span className="badge">Duplicates: {s.finder.duplicates}</span>
+            <span className="badge">Already Joined: {s.finder.alreadyJoined}</span>
+            <span className="badge">Not Joined: {s.finder.notJoined}</span>
+          </div>
+        </div>
+      )}
       <div className="grid" style={{ gridTemplateColumns: "1.2fr .8fr", marginTop: 18 }}>
         <div className="card">
           <h3>گزارش فعالیت</h3>

@@ -12,6 +12,9 @@ import { autoReplyService } from "../../services/autoreply/AutoReplyService.js";
 import { sessionStore } from "./middleware/sessionStore.js";
 import { parseCookies } from "./middleware/auth.js";
 import { isAllowedOrigin } from "./middleware/csrf.js";
+import { publicGroupScanner } from "../../services/finder/Scanner.js";
+import { getSetting, getDb } from "../../database/index.js";
+import { CITIES } from "../../services/finder/cities.js";
 
 ensureDirs();
 initDatabase();
@@ -40,6 +43,7 @@ io.on("connection", (socket) => {
 
 notificationService.attach(io);
 campaignQueue.attach(io);
+publicGroupScanner.attach(io);
 campaignQueue.ensureLoop();
 
 const wa = waManager.primary();
@@ -64,6 +68,19 @@ waManager.startAll().catch((err) => logger.warn({ err: err.message }, "restore s
 
 cron.schedule("*/20 * * * * *", () => {
   campaignQueue.processScheduled();
+});
+
+cron.schedule("15 * * * *", () => {
+  const hours = Number(getSetting("finder_schedule_hours", "0")) || 0;
+  if (!hours || publicGroupScanner.running) return;
+  const last = getDb().prepare("SELECT started_at FROM public_group_scans ORDER BY id DESC LIMIT 1").get();
+  if (last) {
+    const then = new Date(String(last.started_at).replace(" ", "T") + "Z").getTime();
+    if (Date.now() - then < hours * 3600 * 1000 - 60000) return;
+  }
+  publicGroupScanner
+    .start({ cities: CITIES.map((c) => c.id), userId: null })
+    .catch((err) => logger.warn({ err: err.message }, "scheduled finder scan skipped"));
 });
 
 server.listen(config.port, "0.0.0.0", () => {

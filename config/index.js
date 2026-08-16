@@ -60,6 +60,17 @@ export const config = {
   telegramBotToken: env("TELEGRAM_BOT_TOKEN", ""),
   telegramChatId: env("TELEGRAM_CHAT_ID", ""),
   logLevel: env("LOG_LEVEL", "info"),
+  finder: {
+    googleKey: env("GOOGLE_CSE_API_KEY", ""),
+    googleCx: env("GOOGLE_CSE_CX", ""),
+    bingKey: env("BING_SEARCH_API_KEY", ""),
+    customUrl: env("SEARCH_CUSTOM_URL", ""),
+    customHeader: env("SEARCH_CUSTOM_HEADER", ""),
+    crawlDelayMs: envInt("FINDER_CRAWL_DELAY_MS", 2000),
+    maxPagesPerScan: envInt("FINDER_MAX_PAGES_PER_SCAN", 20),
+    maxResultsPerQuery: envInt("FINDER_MAX_RESULTS_PER_QUERY", 8),
+    requestTimeoutMs: envInt("FINDER_TIMEOUT_MS", 8000)
+  },
   paths: {
     data: path.join(rootDir, "database"),
     sqlite: path.join(rootDir, "database", "app.sqlite"),

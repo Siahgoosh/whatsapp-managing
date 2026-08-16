@@ -54,7 +54,8 @@ function seedSettings() {
     telegram_bot_token: config.telegramBotToken,
     telegram_chat_id: config.telegramChatId,
     ai_mode: "suggest",
-    theme: "dark"
+    theme: "dark",
+    finder_schedule_hours: "0"
   };
   const insert = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
   for (const [key, value] of Object.entries(defaults)) {
@@ -98,9 +99,16 @@ export function closeDatabase() {
 
 export function resetDatabaseForTests() {
   closeDatabase();
-  for (const suffix of ["", "-wal", "-shm"]) {
-    const p = config.paths.sqlite + suffix;
-    if (fs.existsSync(p)) fs.unlinkSync(p);
+  for (let i = 0; i < 5; i++) {
+    try {
+      for (const suffix of ["", "-wal", "-shm"]) {
+        const p = config.paths.sqlite + suffix;
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      }
+      break;
+    } catch {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30);
+    }
   }
   initDatabase();
 }

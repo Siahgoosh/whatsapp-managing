@@ -17,6 +17,7 @@ import { quickRepliesRouter } from "./routes/quickReplies.js";
 import { settingsRouter } from "./routes/settings.js";
 import { dashboardRouter, notificationsRouter } from "./routes/dashboard.js";
 import { filesRouter } from "./routes/files.js";
+import { finderRouter } from "./routes/finder.js";
 import { logger } from "./utils/logger.js";
 import { getDb } from "../../database/index.js";
 import { waManager } from "../../services/whatsapp/WhatsAppService.js";
@@ -64,6 +65,7 @@ export function createApp() {
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/files", filesRouter);
+  app.use("/api/finder", finderRouter);
 
   app.get(
     "/api/scheduler",

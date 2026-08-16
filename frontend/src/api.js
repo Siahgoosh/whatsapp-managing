@@ -65,5 +65,15 @@ export const api = {
   notifications: () => request("/api/notifications"),
   readAll: () => request("/api/notifications/read-all", { method: "POST", body: "{}" }),
   scheduler: () => request("/api/scheduler"),
-  reports: () => request("/api/reports")
+  reports: () => request("/api/reports"),
+  finderMeta: () => request("/api/finder/meta"),
+  finderGroups: (qs = "") => request(`/api/finder/groups${qs}`),
+  finderStats: () => request("/api/finder/stats"),
+  finderScans: () => request("/api/finder/scans"),
+  finderScan: (cities) => request("/api/finder/scan", { method: "POST", body: JSON.stringify({ cities }) }),
+  finderAdd: (body) => request("/api/finder/groups", { method: "POST", body: JSON.stringify(body) }),
+  finderPatch: (id, body) => request(`/api/finder/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  finderImport: (csv) => request("/api/finder/import", { method: "POST", body: JSON.stringify({ csv }) }),
+  finderToCampaign: (body) => request("/api/finder/add-to-campaign", { method: "POST", body: JSON.stringify(body) }),
+  finderSchedule: (hours) => request("/api/finder/schedule", { method: "PUT", body: JSON.stringify({ hours }) })
 };

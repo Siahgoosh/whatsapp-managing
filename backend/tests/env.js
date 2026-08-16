@@ -9,4 +9,5 @@ process.env.RETRY_WAIT_SECONDS = "0";
 process.env.MAX_CONSECUTIVE_FAILURES = "5";
 process.env.AI_ENABLED = "false";
 process.env.TELEGRAM_ENABLED = "false";
-process.env.LOG_LEVEL = "silent";
+process.env.FINDER_MAX_PAGES_PER_SCAN = "0";
+process.env.FINDER_TIMEOUT_MS = "500";

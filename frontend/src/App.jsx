@@ -16,6 +16,7 @@ import { AiPage } from "./pages/Ai.jsx";
 import { SchedulerPage } from "./pages/Scheduler.jsx";
 import { ReportsPage } from "./pages/Reports.jsx";
 import { SettingsPage } from "./pages/Settings.jsx";
+import { PublicGroupFinder } from "./pages/PublicGroupFinder.jsx";
 
 function Guard({ children }) {
   const { user } = useApp();
@@ -41,6 +42,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="whatsapp" element={<WhatsAppPage />} />
         <Route path="groups" element={<GroupsPage />} />
+        <Route path="public-group-finder" element={<PublicGroupFinder />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
         <Route path="campaigns/new" element={<WizardPage />} />
