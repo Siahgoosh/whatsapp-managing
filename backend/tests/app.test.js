@@ -280,6 +280,9 @@ test("security headers present", async () => {
   const { app } = setupApp();
   const res = await request(app).get("/health");
   assert.ok(res.headers["x-content-type-options"]);
+  const csp = String(res.headers["content-security-policy"] || "");
+  assert.equal(csp.includes("upgrade-insecure-requests"), false);
+  assert.equal(Boolean(res.headers["strict-transport-security"]), false);
 });
 
 async function waitFor(fn, timeout = 5000) {
