@@ -111,34 +111,29 @@ mkdir -p database uploads logs sessions
 
 پوشهٔ `frontend/dist` داخل git نیست. اگر فقط `git pull` و `restart` قبلی را بزنید، منوی پنل عوض نمی‌شود.
 
-```bash
-cd /opt/whatsapp-managing
-chmod +x scripts/*.sh
-./scripts/update.sh
-```
-
-یا دستی:
+**فقط یکی از Node یا Docker را اجرا کنید، نه هر دو.** پورت 9454 نمی‌تواند دو بار bind شود.
 
 ```bash
 cd /opt/whatsapp-managing
+./scripts/stop.sh
+git checkout -- .env.example
 git fetch origin
 git pull origin cursor/whatsapp-campaign-manager-b0db
+chmod +x scripts/*.sh
 ./scripts/install.sh
-./scripts/restart.sh
+./scripts/start.sh
 ```
 
-بعد در مرورگر **Ctrl+Shift+R** (Hard Refresh).
+بعد در مرورگر **Ctrl+Shift+R**.
 
-با Docker باید ایمیج را دوباره بسازید:
+اگر Docker می‌خواهید (و Node را قبلاً stop کرده‌اید):
 
 ```bash
+./scripts/stop.sh
+docker compose down
+git checkout -- .env.example
+git pull origin cursor/whatsapp-campaign-manager-b0db
 docker compose up -d --build
-```
-
-با Docker:
-
-```bash
-docker compose up -d
 ```
 
 بررسی سلامت:
