@@ -89,6 +89,17 @@ finderRouter.post(
   })
 );
 
+finderRouter.post(
+  "/crawl",
+  asyncHandler(async (req, res) => {
+    const urls = Array.isArray(req.body.urls) ? req.body.urls : String(req.body.urlsText || "").split(/\s+/);
+    const city = req.body.city || "لامرد";
+    const result = await publicGroupScanner.crawlSeeds({ urls, city, userId: req.user.id });
+    systemLog("finder_seed_crawl", "Crawled public seed URLs", { userId: req.user.id });
+    res.json(result);
+  })
+);
+
 const addSchema = z.object({
   groupName: z.string().min(1).max(120),
   city: z.string().min(1).max(40),

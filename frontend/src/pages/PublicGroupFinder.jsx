@@ -26,6 +26,8 @@ export function PublicGroupFinder() {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ groupName: "", city: "لامرد", url: "", category: "سایر", notes: "" });
   const [csv, setCsv] = useState("");
+  const [seedUrls, setSeedUrls] = useState("");
+  const [seedCity, setSeedCity] = useState("لامرد");
   const [joinQueue, setJoinQueue] = useState([]);
   const [joinIdx, setJoinIdx] = useState(-1);
 
@@ -139,7 +141,14 @@ export function PublicGroupFinder() {
 
       {!meta.configured && (
         <div className="card" style={{ marginBottom: 16, borderColor: "var(--warning)" }}>
-          Search API تنظیم نشده است. برای اسکن وب، در `.env` مقدار `GOOGLE_CSE_API_KEY` و `GOOGLE_CSE_CX` یا `BING_SEARCH_API_KEY` را بگذارید. افزودن دستی و CSV بدون API کار می‌کند.
+          <b>جستجوی گوگل بدون API رسمی ممکن نیست.</b> اسکرپ کردن صفحه نتایج گوگل CAPTCHA و ضدربات دارد و در این پنل پیاده نمی‌شود.
+          <p>کلید رایگان Google CSE (حدود ۱۰۰ جستجو در روز):</p>
+          <ol>
+            <li>بروید به <a href="https://programmablesearchengine.google.com/" target="_blank" rel="noreferrer">programmablesearchengine.google.com</a> و یک Search Engine بسازید. گزینه Search the entire web را روشن کنید. <b>Search engine ID</b> همان <code>GOOGLE_CSE_CX</code> است.</li>
+            <li>بروید به <a href="https://console.cloud.google.com/apis/library/customsearch.googleapis.com" target="_blank" rel="noreferrer">Custom Search JSON API</a> را Enable کنید و از Credentials یک API Key بسازید = <code>GOOGLE_CSE_API_KEY</code>.</li>
+            <li>هر دو را در فایل <code>.env</code> سرور بگذارید و پنل را Restart کنید.</li>
+          </ol>
+          بدون این کلید، از کادر پایین برای <b>اسکرپ صفحات عمومی</b> استفاده کنید: آدرس صفحه‌هایی که خودتان می‌شناسید (مثلاً دایرکتوری یا پست وبلاگ) را بدهید تا لینک‌های chat.whatsapp.com استخراج شود.
         </div>
       )}
 
@@ -246,7 +255,28 @@ export function PublicGroupFinder() {
 
       <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="card">
-          <h3>ورود CSV / دستی</h3>
+          <h3>اسکرپ صفحات عمومی (بدون گوگل)</h3>
+          <p className="muted">هر خط یک URL عمومی. robots.txt رعایت می‌شود. localhost و شبکه داخلی بلاک است.</p>
+          <select className="input" value={seedCity} onChange={(e) => setSeedCity(e.target.value)}>
+            {(meta.cities || []).map((c) => <option key={c.id} value={c.fa}>{c.fa}</option>)}
+          </select>
+          <textarea value={seedUrls} onChange={(e) => setSeedUrls(e.target.value)} placeholder={"https://example.com/lamerd-groups\nhttps://example.com/mehr-ads"} />
+          <button
+            className="btn"
+            style={{ marginTop: 8 }}
+            onClick={async () => {
+              try {
+                const r = await api.finderCrawl({ urlsText: seedUrls, city: seedCity });
+                pushToast(`لینک واتساپ: ${r.whatsappLinks} — جدید ${r.newLinks}`);
+                load();
+              } catch (e) {
+                pushToast(e.message);
+              }
+            }}
+          >
+            شروع اسکرپ صفحات
+          </button>
+          <h3 style={{ marginTop: 18 }}>ورود CSV</h3>
           <textarea value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={"city,group_name,url\nLamerd,گروه املاک,https://chat.whatsapp.com/..."} />
           <button className="btn secondary" style={{ marginTop: 8 }} onClick={importCsv}>Import CSV</button>
         </div>

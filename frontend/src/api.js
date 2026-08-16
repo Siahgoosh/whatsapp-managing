@@ -71,6 +71,7 @@ export const api = {
   finderStats: () => request("/api/finder/stats"),
   finderScans: () => request("/api/finder/scans"),
   finderScan: (cities) => request("/api/finder/scan", { method: "POST", body: JSON.stringify({ cities }) }),
+  finderCrawl: (body) => request("/api/finder/crawl", { method: "POST", body: JSON.stringify(body) }),
   finderAdd: (body) => request("/api/finder/groups", { method: "POST", body: JSON.stringify(body) }),
   finderPatch: (id, body) => request(`/api/finder/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   finderImport: (csv) => request("/api/finder/import", { method: "POST", body: JSON.stringify({ csv }) }),

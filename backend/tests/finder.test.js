@@ -125,6 +125,17 @@ test("fake search scan extracts public invite without joining", async () => {
   assert.equal(list.status, 200);
 });
 
+test("seed crawl rejects private URLs", async () => {
+  const { app } = setupApp();
+  const { agent, csrf } = await login(app);
+  const res = await agent.post("/api/finder/crawl").set("X-CSRF-Token", csrf).send({
+    urls: ["http://127.0.0.1/admin"],
+    city: "لامرد"
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.whatsappLinks, 0);
+});
+
 test("already joined detection by public group name", () => {
   setupApp();
   seedGroups(1);

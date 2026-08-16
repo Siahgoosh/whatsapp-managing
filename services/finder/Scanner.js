@@ -253,6 +253,64 @@ export class PublicGroupScanner extends EventEmitter {
     }
     return out;
   }
+
+  async crawlSeeds({ urls = [], city = "لامرد", userId = null } = {}) {
+    if (this.running) throw Object.assign(new Error("اسکن در حال اجراست"), { status: 409 });
+    const list = [...new Set(urls.map((u) => String(u).trim()).filter(Boolean))].slice(0, 30);
+    if (!list.length) throw Object.assign(new Error("حداقل یک URL عمومی لازم است"), { status: 400 });
+    const cityObj = CITIES.find((c) => c.fa === city || c.id === city) || { fa: city, id: city };
+    const info = getDb()
+      .prepare(`INSERT INTO public_group_scans (user_id, status, cities, progress_json) VALUES (?, 'running', ?, ?)`)
+      .run(userId, cityObj.fa, "{}");
+    this.scanId = Number(info.lastInsertRowid);
+    this.running = true;
+    let newLinks = 0;
+    let duplicates = 0;
+    let invalidLinks = 0;
+    let waLinks = 0;
+    let blocked = 0;
+    try {
+      for (const url of list) {
+        const crawled = await this.crawlPage(
+          url,
+          cityObj,
+          "seed-url",
+          { title: url, sourceWebsite: "" },
+          "website"
+        );
+        if (!crawled.fetched && crawled.links === 0) blocked += 1;
+        waLinks += crawled.links;
+        newLinks += crawled.fresh;
+        duplicates += crawled.dups;
+        invalidLinks += crawled.invalid;
+        this.emitProgress({
+          city: cityObj.fa,
+          cityIndex: 1,
+          cityTotal: 1,
+          queries: list.length,
+          results: list.length,
+          whatsappLinks: waLinks,
+          newGroups: newLinks
+        });
+      }
+      getDb()
+        .prepare(
+          `UPDATE public_group_scans SET status = 'completed', completed_at = datetime('now'),
+           queries_count = ?, results_count = ?, whatsapp_links = ?, new_links = ?, duplicates = ?, invalid_links = ? WHERE id = ?`
+        )
+        .run(list.length, list.length, waLinks, newLinks, duplicates, invalidLinks, this.scanId);
+    } finally {
+      this.running = false;
+    }
+    return {
+      fetched: list.length,
+      whatsappLinks: waLinks,
+      newLinks,
+      duplicates,
+      invalidLinks,
+      blockedRobotsOrSkipped: blocked
+    };
+  }
 }
 
 export const publicGroupScanner = new PublicGroupScanner();
