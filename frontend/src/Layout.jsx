@@ -3,22 +3,39 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api, setCsrf } from "./api.js";
 import { statusFa, useApp } from "./store.jsx";
 
-const LINKS = [
-  ["/", "داشبورد"],
-  ["/whatsapp", "واتساپ"],
-  ["/groups", "گروه‌ها"],
-  ["/admin-outreach", "Admin Outreach"],
-  ["/discovered-groups", "Discovered Groups"],
-  ["/public-group-finder", "جستجوی گروه عمومی"],
-  ["/inbox", "صندوق ورودی"],
-  ["/campaigns", "کمپین‌ها"],
-  ["/templates", "قالب‌ها"],
-  ["/auto-reply", "پاسخ خودکار"],
-  ["/ai", "دستیار هوش مصنوعی"],
-  ["/scheduler", "زمان‌بندی"],
-  ["/reports", "گزارش‌ها"],
-  ["/settings", "تنظیمات"]
+const NAV = [
+  {
+    title: "اصلی",
+    items: [
+      ["/", "داشبورد"],
+      ["/whatsapp", "واتساپ"]
+    ]
+  },
+  {
+    title: "گروه‌ها و ارتباط",
+    items: [
+      ["/groups", "مدیریت گروه‌ها"],
+      ["/admin-outreach", "ارتباط با مدیران"],
+      ["/discovered-groups", "گروه‌های کشف‌شده"],
+      ["/public-group-finder", "جستجوی گروه عمومی"]
+    ]
+  },
+  {
+    title: "کمپین",
+    items: [
+      ["/inbox", "صندوق ورودی"],
+      ["/campaigns", "کمپین‌ها"],
+      ["/templates", "قالب‌ها"],
+      ["/auto-reply", "پاسخ خودکار"],
+      ["/ai", "دستیار هوش مصنوعی"],
+      ["/scheduler", "زمان‌بندی"],
+      ["/reports", "گزارش‌ها"],
+      ["/settings", "تنظیمات"]
+    ]
+  }
 ];
+
+const HIGHLIGHT = new Set(["/admin-outreach", "/discovered-groups"]);
 
 export function Layout() {
   const { user, setUser, theme, setTheme, wa, notifications } = useApp();
@@ -43,13 +60,18 @@ export function Layout() {
           </div>
         </div>
         <nav className="nav">
-          {LINKS.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === "/"}>
-              {label}
-            </NavLink>
+          {NAV.map((section) => (
+            <div key={section.title} className="nav-section">
+              <div className="nav-label">{section.title}</div>
+              {section.items.map(([to, label]) => (
+                <NavLink key={to} to={to} end={to === "/"} className={HIGHLIGHT.has(to) ? "nav-highlight" : undefined}>
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
-        <div style={{ marginTop: "auto", padding: 10 }}>
+        <div className="sidebar-foot">
           <div className={`badge ${wa.status === "connected" ? "ok" : "warn"}`}>{statusFa(wa.status)}</div>
           <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
             {user?.displayName} · {user?.role === "admin" ? "مدیر" : "اپراتور"}

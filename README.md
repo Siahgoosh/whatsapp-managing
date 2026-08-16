@@ -68,9 +68,11 @@ docker compose up -d
 | اسکریپت | کار |
 | --- | --- |
 | `scripts/install.sh` | نصب وابستگی‌ها و build فرانت |
-| `scripts/start.sh` | اجرا در پس‌زمینه |
+| `scripts/build-frontend.sh` | ساخت مجدد UI (برای دیدن منوهای جدید لازم است) |
+| `scripts/start.sh` | ساخت UI در صورت نیاز و اجرا در پس‌زمینه |
 | `scripts/stop.sh` | توقف |
-| `scripts/restart.sh` | توقف و اجرا مجدد |
+| `scripts/restart.sh` | توقف، build فرانت، اجرا مجدد |
+| `scripts/update.sh` | git pull + install + restart |
 | `scripts/healthcheck.js` | بررسی `/health` |
 
 ## قابلیت‌ها

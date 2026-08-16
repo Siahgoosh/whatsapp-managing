@@ -107,6 +107,34 @@ mkdir -p database uploads logs sessions
 ./scripts/restart.sh
 ```
 
+### به‌روزرسانی (بعد از git pull)
+
+پوشهٔ `frontend/dist` داخل git نیست. اگر فقط `git pull` و `restart` قبلی را بزنید، منوی پنل عوض نمی‌شود.
+
+```bash
+cd /opt/whatsapp-managing
+chmod +x scripts/*.sh
+./scripts/update.sh
+```
+
+یا دستی:
+
+```bash
+cd /opt/whatsapp-managing
+git fetch origin
+git pull origin cursor/whatsapp-campaign-manager-b0db
+./scripts/install.sh
+./scripts/restart.sh
+```
+
+بعد در مرورگر **Ctrl+Shift+R** (Hard Refresh).
+
+با Docker باید ایمیج را دوباره بسازید:
+
+```bash
+docker compose up -d --build
+```
+
 با Docker:
 
 ```bash

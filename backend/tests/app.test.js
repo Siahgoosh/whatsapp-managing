@@ -14,6 +14,8 @@ test("health check", async () => {
   assert.equal(res.status, 200);
   assert.equal(res.body.ok, true);
   assert.equal(res.body.port, 9454);
+  assert.ok(res.body.features.includes("outreach"));
+  assert.ok(res.body.features.includes("discovery"));
 });
 
 test("login success, logout, and rejected bad password", async () => {

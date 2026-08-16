@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import fs from "node:fs";
 import path from "node:path";
 import cookieParser from "cookie-parser";
 import { config } from "../../config/index.js";
@@ -51,7 +52,9 @@ export function createApp() {
       port: config.port,
       uptime: process.uptime(),
       database: Boolean(getDb()),
-      whatsapp: wa.status
+      whatsapp: wa.status,
+      features: ["outreach", "discovery", "finder"],
+      frontendBuilt: fs.existsSync(path.join(config.paths.frontendDist, "index.html"))
     });
   });
 
@@ -111,11 +114,23 @@ export function createApp() {
   );
 
   if (!config.isDev && !config.isTest) {
-    app.use(express.static(config.paths.frontendDist));
+    app.use(
+      express.static(config.paths.frontendDist, {
+        index: false,
+        setHeaders(res, filePath) {
+          if (filePath.endsWith("index.html")) {
+            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+          } else {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        }
+      })
+    );
     app.get("*", (req, res, next) => {
       if (req.path.startsWith("/api") || req.path === "/health" || req.path.startsWith("/socket.io")) {
         return next();
       }
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       res.sendFile(path.join(config.paths.frontendDist, "index.html"));
     });
   }

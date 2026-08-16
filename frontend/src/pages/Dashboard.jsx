@@ -61,30 +61,28 @@ export function Dashboard() {
           <b>{s.finder?.alreadyJoined ?? "—"}</b>
         </div>
       </div>
-      {s.outreach && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3>Admin Outreach</h3>
+      <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16 }}>
+        <Link to="/admin-outreach" className="card">
+          <h3>ارتباط با مدیران</h3>
           <div className="row">
-            <span className="badge">Admins Found {s.outreach.adminsFound}</span>
-            <span className="badge warn">Pending Approval {s.outreach.pendingApproval}</span>
-            <span className="badge">Contacted {s.outreach.adminsContacted}</span>
-            <span className="badge info">Replied {s.outreach.adminsReplied}</span>
-            <span className="badge ok">Permission Granted {s.outreach.permissionsGranted}</span>
+            <span className="badge">Admins Found {s.outreach?.adminsFound ?? 0}</span>
+            <span className="badge warn">Pending Approval {s.outreach?.pendingApproval ?? 0}</span>
+            <span className="badge">Contacted {s.outreach?.adminsContacted ?? 0}</span>
+            <span className="badge info">Replied {s.outreach?.adminsReplied ?? 0}</span>
+            <span className="badge ok">Permission Granted {s.outreach?.permissionsGranted ?? 0}</span>
           </div>
-        </div>
-      )}
-      {s.discovery && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3>Group Discovery</h3>
+        </Link>
+        <Link to="/discovered-groups" className="card">
+          <h3>گروه‌های کشف‌شده</h3>
           <div className="row">
-            <span className="badge">Links Found {s.discovery.linksFound}</span>
-            <span className="badge">New Groups {s.discovery.newGroups}</span>
-            <span className="badge">Already Joined {s.discovery.alreadyJoined}</span>
-            <span className="badge warn">Pending Review {s.discovery.pendingReview}</span>
-            <span className="badge ok">Approved Groups {s.discovery.approvedGroups}</span>
+            <span className="badge">Links Found {s.discovery?.linksFound ?? 0}</span>
+            <span className="badge">New Groups {s.discovery?.newGroups ?? 0}</span>
+            <span className="badge">Already Joined {s.discovery?.alreadyJoined ?? 0}</span>
+            <span className="badge warn">Pending Review {s.discovery?.pendingReview ?? 0}</span>
+            <span className="badge ok">Approved Groups {s.discovery?.approvedGroups ?? 0}</span>
           </div>
-        </div>
-      )}
+        </Link>
+      </div>
       {s.finder && (
         <div className="card" style={{ marginTop: 16 }}>
           <h3>آمار جستجوی گروه عمومی</h3>

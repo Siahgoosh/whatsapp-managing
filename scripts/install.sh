@@ -12,5 +12,5 @@ fi
 mkdir -p database uploads logs sessions
 npm install
 npm --prefix frontend install
-npm --prefix frontend run build
+./scripts/build-frontend.sh
 echo "==> Install complete. Start with ./scripts/start.sh"
