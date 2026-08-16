@@ -15,6 +15,8 @@ import { isAllowedOrigin } from "./middleware/csrf.js";
 import { publicGroupScanner } from "../../services/finder/Scanner.js";
 import { getSetting, getDb } from "../../database/index.js";
 import { CITIES } from "../../services/finder/cities.js";
+import { groupLinkMonitor } from "../../services/outreach/GroupLinkMonitor.js";
+import { outreachService } from "../../services/outreach/OutreachService.js";
 
 ensureDirs();
 initDatabase();
@@ -44,6 +46,8 @@ io.on("connection", (socket) => {
 notificationService.attach(io);
 campaignQueue.attach(io);
 publicGroupScanner.attach(io);
+groupLinkMonitor.attach(io);
+outreachService.attach(io);
 campaignQueue.ensureLoop();
 
 const wa = waManager.primary();
@@ -63,6 +67,16 @@ wa.on("inbox", (payload) => {
   io.emit("inbox:message", payload);
   autoReplyService.handleIncoming({ sessionKey: "default", ...payload }).catch(() => {});
 });
+wa.on("group-message", (payload) => {
+  groupLinkMonitor.handleGroupMessage(payload).catch((err) => logger.warn({ err: err.message }, "link monitor"));
+});
+wa.on("private-message", (payload) => {
+  outreachService.handleIncoming(payload);
+});
+wa.on("groups-synced", () => {
+  groupLinkMonitor.refreshJoined();
+  outreachService.markFollowUps();
+});
 
 waManager.startAll().catch((err) => logger.warn({ err: err.message }, "restore sessions"));
 
@@ -81,6 +95,10 @@ cron.schedule("15 * * * *", () => {
   publicGroupScanner
     .start({ cities: CITIES.map((c) => c.id), userId: null })
     .catch((err) => logger.warn({ err: err.message }, "scheduled finder scan skipped"));
+});
+
+cron.schedule("20 * * * *", () => {
+  outreachService.markFollowUps();
 });
 
 server.listen(config.port, "0.0.0.0", () => {

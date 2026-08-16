@@ -34,7 +34,11 @@ export function WizardPage() {
   const [limits, setLimits] = useState({ minDelaySeconds: 3, maxDelaySeconds: 30 });
 
   useEffect(() => {
-    api.groups().then((d) => setGroups(d.groups || []));
+    api.groups().then((d) => {
+      const list = d.groups || [];
+      setGroups(list);
+      setSelected(new Set(list.filter((g) => g.advertising_permission === "approved").map((g) => g.id)));
+    });
     api.settings().then((d) => setLimits(d.limits || limits));
   }, []);
 
@@ -145,9 +149,15 @@ export function WizardPage() {
                     setSelected(n);
                   }} />
                   <span>{g.name}</span>
+                  {g.advertising_permission === "approved" ? (
+                    <span className="badge ok">🟢 Permission Granted</span>
+                  ) : (
+                    <span className="badge">{g.advertising_permission === "unknown" ? "اجازه نامشخص" : g.advertising_permission}</span>
+                  )}
                 </label>
               ))}
             </div>
+            <p className="muted">به‌صورت پیش‌فرض فقط گروه‌های Joined با Advertising Permission = Approved انتخاب می‌شوند.</p>
           </>
         )}
         {step === 4 && (

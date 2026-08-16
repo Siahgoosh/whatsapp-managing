@@ -17,11 +17,35 @@ export function initDatabase() {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA_SQL);
+  migrateSchema(db);
   seedAdmin();
   seedDefaultSession();
   seedSettings();
   seedQuickReplies();
   return db;
+}
+
+function tableColumns(database, table) {
+  return database.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+}
+
+function addColumn(database, table, column, definition) {
+  const cols = tableColumns(database, table);
+  if (!cols.includes(column)) {
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+function migrateSchema(database) {
+  addColumn(database, "groups", "last_activity_at", "TEXT");
+  addColumn(database, "groups", "admin_count", "INTEGER");
+  addColumn(database, "groups", "city", "TEXT NOT NULL DEFAULT 'سایر'");
+  addColumn(database, "groups", "advertising_permission", "TEXT NOT NULL DEFAULT 'unknown'");
+  addColumn(database, "groups", "notes", "TEXT NOT NULL DEFAULT ''");
+  addColumn(database, "groups", "source", "TEXT NOT NULL DEFAULT 'whatsapp_sync'");
+  addColumn(database, "groups", "found_by", "TEXT");
+  addColumn(database, "groups", "found_at", "TEXT");
+  addColumn(database, "groups", "source_group_name", "TEXT");
 }
 
 function seedAdmin() {
@@ -55,7 +79,11 @@ function seedSettings() {
     telegram_chat_id: config.telegramChatId,
     ai_mode: "suggest",
     theme: "dark",
-    finder_schedule_hours: "0"
+    finder_schedule_hours: "0",
+    office_name: "املاک فرتاک",
+    outreach_follow_up_hours: "24",
+    admin_outreach_template:
+      "سلام {{admin_name}}، وقت بخیر. من از مجموعه {{office_name}} هستم. در زمینه فایل‌های ملکی منطقه {{city}} فعالیت داریم. در صورت اجازه شما، مایل هستیم بعضی فایل‌های مرتبط و محدود را در گروه {{group_name}} منتشر کنیم. اگر موافق باشید، ممنون می‌شوم اطلاع دهید."
   };
   const insert = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
   for (const [key, value] of Object.entries(defaults)) {

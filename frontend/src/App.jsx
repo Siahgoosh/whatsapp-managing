@@ -17,6 +17,8 @@ import { SchedulerPage } from "./pages/Scheduler.jsx";
 import { ReportsPage } from "./pages/Reports.jsx";
 import { SettingsPage } from "./pages/Settings.jsx";
 import { PublicGroupFinder } from "./pages/PublicGroupFinder.jsx";
+import { AdminOutreach } from "./pages/AdminOutreach.jsx";
+import { DiscoveredGroups } from "./pages/DiscoveredGroups.jsx";
 
 function Guard({ children }) {
   const { user } = useApp();
@@ -43,6 +45,8 @@ export default function App() {
         <Route path="whatsapp" element={<WhatsAppPage />} />
         <Route path="groups" element={<GroupsPage />} />
         <Route path="public-group-finder" element={<PublicGroupFinder />} />
+        <Route path="admin-outreach" element={<AdminOutreach />} />
+        <Route path="discovered-groups" element={<DiscoveredGroups />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
         <Route path="campaigns/new" element={<WizardPage />} />

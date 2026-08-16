@@ -29,6 +29,22 @@ const STATUS_FA = {
   joined: "عضو",
   not_joined: "عضو نیست",
   already_joined: "قبلاً عضو",
+  new: "جدید",
+  prepared: "پیام آماده",
+  pending_approval: "در انتظار تأیید",
+  discovered: "کشف‌شده",
+  contact_pending: "در انتظار تماس",
+  message_approved: "پیام تأییدشده",
+  contacted: "تماس‌گرفته",
+  replied: "پاسخ‌داده",
+  permission_granted: "اجازه ثبت شد",
+  marketing_group: "گروه بازاریابی",
+  declined: "ردشده",
+  requested: "درخواست‌شده",
+  approved: "مجاز",
+  blocked: "مسدود",
+  already_discovered: "قبلاً کشف‌شده"
+};
 
 export function statusFa(s) {
   return STATUS_FA[s] || s;

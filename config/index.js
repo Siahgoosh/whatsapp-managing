@@ -71,6 +71,9 @@ export const config = {
     maxResultsPerQuery: envInt("FINDER_MAX_RESULTS_PER_QUERY", 8),
     requestTimeoutMs: envInt("FINDER_TIMEOUT_MS", 8000)
   },
+  maxOutreachBatch: envInt("MAX_OUTREACH_BATCH", 25),
+  outreachFollowUpHours: envInt("OUTREACH_FOLLOW_UP_HOURS", 24),
+  outreachMinDelaySeconds: minDelay,
   paths: {
     data: path.join(rootDir, "database"),
     sqlite: path.join(rootDir, "database", "app.sqlite"),

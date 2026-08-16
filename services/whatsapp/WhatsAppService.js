@@ -14,6 +14,7 @@ import { getDb } from "../../database/index.js";
 import { logger, systemLog } from "../../backend/src/utils/logger.js";
 import { nowSql } from "../../backend/src/utils/persian.js";
 import { absUpload } from "../../backend/src/utils/files.js";
+import { inferCityFromName } from "../finder/cities.js";
 
 const STATUSES = [
   "disconnected",
@@ -195,31 +196,68 @@ export class WhatsAppService extends EventEmitter {
     }
   }
 
+  messageBody(msg) {
+    const m = msg.message || {};
+    return (
+      m.conversation ||
+      m.extendedTextMessage?.text ||
+      m.imageMessage?.caption ||
+      m.videoMessage?.caption ||
+      m.documentMessage?.caption ||
+      ""
+    );
+  }
+
   async onMessages(upsert) {
-    if (upsert.type !== "notify") return;
+    if (upsert.type !== "notify" && upsert.type !== "append") return;
     for (const msg of upsert.messages || []) {
-      if (!msg.message || msg.key.fromMe) continue;
+      if (!msg.message) continue;
       const chatId = msg.key.remoteJid;
       if (!chatId || chatId === "status@broadcast") continue;
-      const body =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption ||
-        msg.message.videoMessage?.caption ||
-        "";
+      const body = this.messageBody(msg);
+      const fromMe = Boolean(msg.key.fromMe);
       const chatType = isGroupJid(chatId) ? "group" : "contact";
+      const senderJid = chatType === "group" ? msg.key.participant || "" : chatId;
+      const senderName = msg.pushName || "";
       const session = this.row();
       let chatName = chatId;
       try {
         if (chatType === "group") {
-          const meta = await this.sock.groupMetadata(chatId);
-          chatName = meta.subject;
+          const cached = getDb()
+            .prepare("SELECT name FROM groups WHERE session_id = ? AND wa_id = ?")
+            .get(session.id, chatId);
+          chatName = cached?.name || chatId;
+          if (!cached && this.sock) {
+            const meta = await this.sock.groupMetadata(chatId);
+            chatName = meta.subject;
+          }
         } else {
-          chatName = msg.pushName || jidToPhone(chatId);
+          chatName = senderName || jidToPhone(chatId);
         }
       } catch {
-        chatName = msg.pushName || jidToPhone(chatId);
+        chatName = senderName || jidToPhone(chatId);
       }
+
+      if (chatType === "group") {
+        getDb()
+          .prepare(
+            `UPDATE groups SET last_activity_at = datetime('now'), updated_at = datetime('now')
+             WHERE session_id = ? AND wa_id = ?`
+          )
+          .run(session.id, chatId);
+        if (body) {
+          this.emit("group-message", {
+            chatId,
+            chatName,
+            body,
+            senderJid,
+            senderName,
+            fromMe
+          });
+        }
+      }
+
+      if (fromMe) continue;
       getDb()
         .prepare(
           `INSERT INTO inbox_messages
@@ -228,6 +266,9 @@ export class WhatsAppService extends EventEmitter {
         )
         .run(session.id, chatId, chatName, chatType, String(body).slice(0, 8000), msg.key.id || null);
       this.emit("inbox", { chatId, chatName, chatType, body });
+      if (chatType === "contact") {
+        this.emit("private-message", { chatId, chatName, body, senderName });
+      }
     }
   }
 
@@ -273,11 +314,14 @@ export class WhatsAppService extends EventEmitter {
     const me = this.sock.user?.id;
     const mePhone = jidToPhone(me);
     const upsert = getDb().prepare(`
-      INSERT INTO groups (session_id, wa_id, name, member_count, membership_status, is_admin, updated_at)
-      VALUES (@session_id, @wa_id, @name, @member_count, 'member', @is_admin, datetime('now'))
+      INSERT INTO groups (session_id, wa_id, name, member_count, admin_count, city, last_activity_at, membership_status, is_admin, updated_at)
+      VALUES (@session_id, @wa_id, @name, @member_count, @admin_count, @city, @last_activity_at, 'member', @is_admin, datetime('now'))
       ON CONFLICT(session_id, wa_id) DO UPDATE SET
         name = excluded.name,
         member_count = excluded.member_count,
+        admin_count = excluded.admin_count,
+        city = CASE WHEN groups.city = 'سایر' THEN excluded.city ELSE groups.city END,
+        last_activity_at = COALESCE(excluded.last_activity_at, groups.last_activity_at),
         membership_status = 'member',
         is_admin = excluded.is_admin,
         updated_at = datetime('now')
@@ -287,11 +331,19 @@ export class WhatsAppService extends EventEmitter {
       const participants = meta.participants || [];
       const self = participants.find((p) => jidToPhone(p.id) === mePhone || p.id === me);
       const isAdmin = self?.admin === "admin" || self?.admin === "superadmin" ? 1 : 0;
+      const adminCount = participants.filter((p) => p.admin === "admin" || p.admin === "superadmin").length;
+      const ts = meta.conversationTimestamp ? Number(meta.conversationTimestamp) : 0;
+      const lastActivityAt = ts
+        ? new Date(ts > 1e12 ? ts : ts * 1000).toISOString().replace("T", " ").slice(0, 19)
+        : null;
       upsert.run({
         session_id: session.id,
         wa_id: jid,
         name: meta.subject || "بدون نام",
         member_count: participants.length || meta.size || null,
+        admin_count: adminCount,
+        city: inferCityFromName(meta.subject || ""),
+        last_activity_at: lastActivityAt,
         is_admin: isAdmin
       });
       seen.push(jid);
@@ -306,7 +358,35 @@ export class WhatsAppService extends EventEmitter {
         )
         .run(session.id, ...seen);
     }
+    this.emit("groups-synced");
     return this.listGroups();
+  }
+
+  async fetchGroupAdmins(waId) {
+    this.assertConnected();
+    if (!isGroupJid(waId)) {
+      const err = new Error("Destination is not a group");
+      err.code = "not_group";
+      throw err;
+    }
+    const meta = await this.sock.groupMetadata(waId);
+    const participants = meta.participants || [];
+    const admins = participants.filter((p) => p.admin === "admin" || p.admin === "superadmin");
+    const ts = meta.conversationTimestamp ? Number(meta.conversationTimestamp) : 0;
+    const lastActivityAt = ts
+      ? new Date(ts > 1e12 ? ts : ts * 1000).toISOString().replace("T", " ").slice(0, 19)
+      : null;
+    return {
+      subject: meta.subject || "",
+      size: meta.size || participants.length,
+      adminCount: admins.length,
+      lastActivityAt,
+      admins: admins.map((p) => ({
+        jid: p.id,
+        displayName: p.name || p.notify || "",
+        role: p.admin
+      }))
+    };
   }
 
   async refreshPicture(sessionId, jid) {
@@ -328,15 +408,25 @@ export class WhatsAppService extends EventEmitter {
 
   listGroups({ q = "", favorite, admin } = {}) {
     const session = this.row();
-    let sql = "SELECT * FROM groups WHERE session_id = ? AND membership_status = 'member'";
+    let sql = `
+      SELECT g.*,
+        COALESCE(
+          g.last_activity_at,
+          (SELECT MAX(created_at) FROM inbox_messages im WHERE im.chat_id = g.wa_id)
+        ) AS last_activity_at,
+        COALESCE(gp.advertising_permission, g.advertising_permission, 'unknown') AS advertising_permission
+      FROM groups g
+      LEFT JOIN group_permissions gp ON gp.group_id = g.id
+      WHERE g.session_id = ? AND g.membership_status = 'member'
+    `;
     const params = [session.id];
     if (q) {
-      sql += " AND name LIKE ?";
-      params.push(`%${q}%`);
+      sql += " AND (g.name LIKE ? OR g.city LIKE ?)";
+      params.push(`%${q}%`, `%${q}%`);
     }
-    if (favorite === true || favorite === "1") sql += " AND is_favorite = 1";
-    if (admin === true || admin === "1") sql += " AND is_admin = 1";
-    sql += " ORDER BY is_favorite DESC, name COLLATE NOCASE ASC";
+    if (favorite === true || favorite === "1") sql += " AND g.is_favorite = 1";
+    if (admin === true || admin === "1") sql += " AND g.is_admin = 1";
+    sql += " ORDER BY g.is_favorite DESC, g.name COLLATE NOCASE ASC";
     return getDb().prepare(sql).all(...params);
   }
 

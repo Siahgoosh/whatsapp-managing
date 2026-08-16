@@ -61,6 +61,30 @@ export function Dashboard() {
           <b>{s.finder?.alreadyJoined ?? "—"}</b>
         </div>
       </div>
+      {s.outreach && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>Admin Outreach</h3>
+          <div className="row">
+            <span className="badge">Admins Found {s.outreach.adminsFound}</span>
+            <span className="badge warn">Pending Approval {s.outreach.pendingApproval}</span>
+            <span className="badge">Contacted {s.outreach.adminsContacted}</span>
+            <span className="badge info">Replied {s.outreach.adminsReplied}</span>
+            <span className="badge ok">Permission Granted {s.outreach.permissionsGranted}</span>
+          </div>
+        </div>
+      )}
+      {s.discovery && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>Group Discovery</h3>
+          <div className="row">
+            <span className="badge">Links Found {s.discovery.linksFound}</span>
+            <span className="badge">New Groups {s.discovery.newGroups}</span>
+            <span className="badge">Already Joined {s.discovery.alreadyJoined}</span>
+            <span className="badge warn">Pending Review {s.discovery.pendingReview}</span>
+            <span className="badge ok">Approved Groups {s.discovery.approvedGroups}</span>
+          </div>
+        </div>
+      )}
       {s.finder && (
         <div className="card" style={{ marginTop: 16 }}>
           <h3>آمار جستجوی گروه عمومی</h3>

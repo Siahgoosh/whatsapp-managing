@@ -18,6 +18,8 @@ import { settingsRouter } from "./routes/settings.js";
 import { dashboardRouter, notificationsRouter } from "./routes/dashboard.js";
 import { filesRouter } from "./routes/files.js";
 import { finderRouter } from "./routes/finder.js";
+import { outreachRouter } from "./routes/outreach.js";
+import { discoveryRouter } from "./routes/discovery.js";
 import { logger } from "./utils/logger.js";
 import { getDb } from "../../database/index.js";
 import { waManager } from "../../services/whatsapp/WhatsAppService.js";
@@ -66,6 +68,8 @@ export function createApp() {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/files", filesRouter);
   app.use("/api/finder", finderRouter);
+  app.use("/api/outreach", outreachRouter);
+  app.use("/api/discovery", discoveryRouter);
 
   app.get(
     "/api/scheduler",

@@ -20,8 +20,28 @@ export const CATEGORIES = [
   "سایر"
 ];
 
+export const CITY_TAGS = [...CITIES.map((c) => c.fa), "سایر"];
+
 export function cityById(id) {
   return CITIES.find((c) => c.id === id || c.fa === id);
+}
+
+export function inferCityFromName(name = "") {
+  const n = String(name || "");
+  for (const city of CITIES) {
+    if (city.aliases.some((alias) => alias && n.includes(alias)) || n.includes(city.fa)) {
+      return city.fa;
+    }
+  }
+  return "سایر";
+}
+
+export function normalizeCityTag(value) {
+  if (!value) return "سایر";
+  const hit = cityById(value);
+  if (hit) return hit.fa;
+  if (CITY_TAGS.includes(value)) return value;
+  return inferCityFromName(value);
 }
 
 export function generateQueries(city) {

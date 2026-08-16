@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS groups (
   is_favorite INTEGER NOT NULL DEFAULT 0,
   tags TEXT NOT NULL DEFAULT '',
   last_campaign_at TEXT,
+  last_activity_at TEXT,
+  admin_count INTEGER,
+  city TEXT NOT NULL DEFAULT 'سایر',
+  advertising_permission TEXT NOT NULL DEFAULT 'unknown',
+  notes TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT 'whatsapp_sync',
+  found_by TEXT,
+  found_at TEXT,
+  source_group_name TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(session_id, wa_id),
@@ -300,4 +309,124 @@ CREATE TABLE IF NOT EXISTS public_group_scans (
 CREATE INDEX IF NOT EXISTS idx_public_groups_city ON public_whatsapp_groups(city);
 CREATE INDEX IF NOT EXISTS idx_public_groups_status ON public_whatsapp_groups(status);
 CREATE INDEX IF NOT EXISTS idx_group_sources_group ON group_sources(group_id);
+
+CREATE TABLE IF NOT EXISTS group_admins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL,
+  group_id INTEGER NOT NULL,
+  wa_jid TEXT NOT NULL,
+  display_name TEXT NOT NULL DEFAULT '',
+  admin_role TEXT NOT NULL DEFAULT 'admin',
+  active INTEGER NOT NULL DEFAULT 1,
+  pipeline_status TEXT NOT NULL DEFAULT 'discovered',
+  message_status TEXT NOT NULL DEFAULT 'new',
+  last_contacted_at TEXT,
+  follow_up_available INTEGER NOT NULL DEFAULT 0,
+  notes TEXT NOT NULL DEFAULT '',
+  prepared_message TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(session_id, group_id, wa_jid),
+  FOREIGN KEY (session_id) REFERENCES whatsapp_sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS admin_contacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  prepared_message TEXT NOT NULL,
+  approved INTEGER NOT NULL DEFAULT 0,
+  approved_at TEXT,
+  sent_at TEXT,
+  status TEXT NOT NULL DEFAULT 'prepared',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (admin_id) REFERENCES group_admins(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS admin_contact_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_id INTEGER NOT NULL,
+  group_id INTEGER,
+  contact_id INTEGER,
+  date TEXT NOT NULL DEFAULT (datetime('now')),
+  message TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL,
+  response TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (admin_id) REFERENCES group_admins(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS admin_permissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL UNIQUE,
+  admin_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'unknown',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  FOREIGN KEY (admin_id) REFERENCES group_admins(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS group_permissions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL UNIQUE,
+  advertising_permission TEXT NOT NULL DEFAULT 'unknown',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_by INTEGER,
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS group_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER,
+  admin_id INTEGER,
+  user_id INTEGER,
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  FOREIGN KEY (admin_id) REFERENCES group_admins(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS discovered_group_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL,
+  invite_url TEXT NOT NULL,
+  normalized_url TEXT NOT NULL UNIQUE,
+  source_group_id INTEGER,
+  source_group_name TEXT NOT NULL DEFAULT '',
+  sender_jid TEXT,
+  sender_name TEXT NOT NULL DEFAULT '',
+  found_at TEXT NOT NULL DEFAULT (datetime('now')),
+  found_by TEXT NOT NULL DEFAULT 'message_link_discovery',
+  validation_status TEXT NOT NULL DEFAULT 'unknown',
+  http_status INTEGER,
+  group_name TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  join_status TEXT NOT NULL DEFAULT 'unknown',
+  city TEXT NOT NULL DEFAULT 'سایر',
+  notes TEXT NOT NULL DEFAULT '',
+  added_to_manager INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (session_id) REFERENCES whatsapp_sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS group_join_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  discovered_id INTEGER NOT NULL,
+  user_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'pending_review',
+  opened_at TEXT,
+  joined_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (discovered_id) REFERENCES discovered_group_links(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_group_admins_group ON group_admins(group_id, active);
+CREATE INDEX IF NOT EXISTS idx_group_admins_jid ON group_admins(session_id, wa_jid);
+CREATE INDEX IF NOT EXISTS idx_admin_history_admin ON admin_contact_history(admin_id, date);
+CREATE INDEX IF NOT EXISTS idx_discovered_links_status ON discovered_group_links(validation_status, join_status);
+CREATE INDEX IF NOT EXISTS idx_groups_permission ON groups(advertising_permission, membership_status);
 `;

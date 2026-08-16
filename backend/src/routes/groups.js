@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler, HttpError } from "../utils/errors.js";
 import { waManager } from "../../../services/whatsapp/WhatsAppService.js";
 import { getDb } from "../../../database/index.js";
+import { outreachService } from "../../../services/outreach/OutreachService.js";
 
 export const groupsRouter = Router();
 groupsRouter.use(requireAuth);
@@ -31,7 +32,10 @@ groupsRouter.post(
 
 const patchSchema = z.object({
   isFavorite: z.boolean().optional(),
-  tags: z.string().max(200).optional()
+  tags: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+  city: z.string().max(40).optional(),
+  advertisingPermission: z.enum(["unknown", "requested", "approved", "declined", "blocked"]).optional()
 });
 
 groupsRouter.patch(
@@ -46,6 +50,15 @@ groupsRouter.patch(
     }
     if (parsed.data.tags !== undefined) {
       getDb().prepare("UPDATE groups SET tags = ? WHERE id = ?").run(parsed.data.tags, group.id);
+    }
+    if (parsed.data.notes !== undefined) {
+      getDb().prepare("UPDATE groups SET notes = ? WHERE id = ?").run(parsed.data.notes, group.id);
+    }
+    if (parsed.data.city !== undefined) {
+      outreachService.setCity(group.id, parsed.data.city);
+    }
+    if (parsed.data.advertisingPermission !== undefined) {
+      outreachService.setPermission(group.id, parsed.data.advertisingPermission, null, req.user.id);
     }
     res.json({ group: getDb().prepare("SELECT * FROM groups WHERE id = ?").get(group.id) });
   })

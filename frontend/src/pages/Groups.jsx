@@ -68,8 +68,26 @@ export function GroupsPage() {
                 <b>{g.name}</b>
                 <div className="muted" style={{ fontSize: 12 }}>
                   {g.wa_id} · اعضا: {g.member_count ?? "—"} · {g.is_admin ? "ادمین" : "عضو"} · {g.membership_status}
+                  {g.city ? ` · ${g.city}` : ""} · مدیران: {g.admin_count ?? "—"}
                 </div>
               </div>
+              {g.advertising_permission === "approved" ? <span className="badge ok">🟢 Permission Granted</span> : null}
+              <select
+                className="input"
+                style={{ maxWidth: 150 }}
+                value={g.advertising_permission || "unknown"}
+                onClick={(e) => e.preventDefault()}
+                onChange={(e) => {
+                  e.preventDefault();
+                  api.patchGroup(g.id, { advertisingPermission: e.target.value }).then(load);
+                }}
+              >
+                <option value="unknown">Unknown</option>
+                <option value="requested">Requested</option>
+                <option value="approved">Approved</option>
+                <option value="declined">Declined</option>
+                <option value="blocked">Blocked</option>
+              </select>
               <button
                 className="btn ghost"
                 type="button"

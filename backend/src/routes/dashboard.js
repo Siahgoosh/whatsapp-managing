@@ -4,6 +4,8 @@ import { asyncHandler } from "../utils/errors.js";
 import { getDb } from "../../../database/index.js";
 import { waManager } from "../../../services/whatsapp/WhatsAppService.js";
 import { notificationService } from "../../../services/notifications/NotificationService.js";
+import { outreachService } from "../../../services/outreach/OutreachService.js";
+import { groupLinkMonitor } from "../../../services/outreach/GroupLinkMonitor.js";
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
@@ -35,7 +37,16 @@ dashboardRouter.get(
     };
     res.json({
       whatsapp: waManager.primary().publicStatus(),
-      stats: { groups, campaigns, sent, failed, active, finder },
+      stats: {
+        groups,
+        campaigns,
+        sent,
+        failed,
+        active,
+        finder,
+        outreach: outreachService.analytics(),
+        discovery: groupLinkMonitor.analytics()
+      },
       activity,
       recent
     });

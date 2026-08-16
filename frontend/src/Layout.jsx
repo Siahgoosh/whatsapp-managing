@@ -7,6 +7,8 @@ const LINKS = [
   ["/", "داشبورد"],
   ["/whatsapp", "واتساپ"],
   ["/groups", "گروه‌ها"],
+  ["/admin-outreach", "Admin Outreach"],
+  ["/discovered-groups", "Discovered Groups"],
   ["/public-group-finder", "جستجوی گروه عمومی"],
   ["/inbox", "صندوق ورودی"],
   ["/campaigns", "کمپین‌ها"],
