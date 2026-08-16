@@ -11,6 +11,7 @@ import { notificationService } from "../../services/notifications/NotificationSe
 import { autoReplyService } from "../../services/autoreply/AutoReplyService.js";
 import { sessionStore } from "./middleware/sessionStore.js";
 import { parseCookies } from "./middleware/auth.js";
+import { isAllowedOrigin } from "./middleware/csrf.js";
 
 ensureDirs();
 initDatabase();
@@ -18,7 +19,10 @@ initDatabase();
 const app = createApp();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: config.corsOrigin, credentials: true }
+  cors: {
+    origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+    credentials: true
+  }
 });
 
 io.use((socket, next) => {

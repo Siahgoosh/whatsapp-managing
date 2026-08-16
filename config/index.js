@@ -34,6 +34,7 @@ export const config = {
   port: envInt("PORT", 9454),
   appName: env("APP_NAME", "WhatsApp Campaign Manager"),
   appUrl: env("APP_URL", "http://localhost:9454"),
+  isHttps: env("APP_URL", "http://localhost:9454").startsWith("https://"),
   tz: env("TZ", "Asia/Tehran"),
   adminUsername: env("ADMIN_USERNAME", "admin"),
   adminPassword: env("ADMIN_PASSWORD", "ChangeMe_9454!"),

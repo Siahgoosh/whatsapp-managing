@@ -14,32 +14,55 @@ export function WhatsAppPage() {
   const { wa, setWa, pushToast } = useApp();
   const [qr, setQr] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState("برای ساخت QR روی «شروع اتصال» بزنید.");
 
-  async function refreshQr() {
-    const d = await api.waQr();
-    setQr(d.qr);
+  function applyStatus(s) {
+    if (!s) return;
+    setWa(s);
+    if (s.qr) setQr(s.qr);
+    if (s.status === "connected") setQr(null);
+  }
+
+  async function refresh() {
+    const s = await api.waStatus();
+    applyStatus(s);
+    if (!s.qr) {
+      const d = await api.waQr();
+      if (d.qr) setQr(d.qr);
+    }
+    return s;
   }
 
   useEffect(() => {
-    refreshQr().catch(() => {});
+    refresh().catch(() => {});
     const socket = io({ withCredentials: true });
-    socket.on("whatsapp:status", (s) => {
-      setWa(s);
-      if (s.status === "qr_required") refreshQr();
-      if (s.status === "connected") setQr(null);
-    });
-    socket.on("whatsapp:qr", () => refreshQr());
-    return () => socket.close();
+    socket.on("whatsapp:status", (s) => applyStatus(s));
+    socket.on("whatsapp:qr", () => refresh().catch(() => {}));
+    const timer = setInterval(() => {
+      refresh().catch(() => {});
+    }, 2000);
+    return () => {
+      socket.close();
+      clearInterval(timer);
+    };
   }, []);
 
   async function connect() {
     setBusy(true);
+    setHint("در حال ساخت نشست و دریافت QR...");
     try {
       const s = await api.waConnect();
-      setWa(s);
-      await refreshQr();
+      applyStatus(s);
+      if (s.qr) {
+        setHint("QR را با واتساپ موبایل اسکن کنید.");
+      } else if (s.status === "connected") {
+        setHint("قبلاً متصل است.");
+      } else {
+        setHint("QR هنوز نیامده. چند ثانیه صبر کنید یا دوباره شروع اتصال را بزنید. اگر نآمد، اینترنت سرور به واتساپ را بررسی کنید.");
+      }
     } catch (e) {
       pushToast(e.message);
+      setHint(e.message);
     } finally {
       setBusy(false);
     }
@@ -49,8 +72,9 @@ export function WhatsAppPage() {
     if (!confirm("خروج از واتساپ باعث توقف کمپین‌های فعال می‌شود.")) return;
     setBusy(true);
     try {
-      setWa(await api.waLogout());
+      applyStatus(await api.waLogout());
       setQr(null);
+      setHint("از حساب خارج شد.");
     } finally {
       setBusy(false);
     }
@@ -65,7 +89,7 @@ export function WhatsAppPage() {
         </div>
         <div className="row">
           <button className="btn" disabled={busy} onClick={connect}>
-            شروع اتصال
+            {busy ? "در حال اتصال..." : "شروع اتصال"}
           </button>
           <button className="btn danger" disabled={busy} onClick={logout}>
             خروج از حساب
@@ -79,10 +103,16 @@ export function WhatsAppPage() {
           <p>نام اکانت: <b>{wa.accountName || "—"}</b></p>
           <p>آخرین اتصال: <b>{wa.lastConnectedAt || "—"}</b></p>
           <p>مدت نشست: <b>{formatDuration(wa.sessionDurationMs)}</b></p>
+          {wa.lastError && <p className="muted">خطا: {wa.lastError}</p>}
         </div>
         <div className="card" style={{ textAlign: "center" }}>
-          {qr ? <img src={qr} alt="QR" style={{ width: 240, height: 240, background: "white", borderRadius: 16 }} /> : (
-            <p className="muted">QR در وضعیت «نیاز به QR» اینجا نمایش داده می‌شود. اطلاعات نشست هرگز در تصویر یا لاگ ذخیرهٔ متنی نشان داده نمی‌شود.</p>
+          {qr ? (
+            <>
+              <img src={qr} alt="QR" style={{ width: 240, height: 240, background: "white", borderRadius: 16 }} />
+              <p className="muted">QR را با گوشی اسکن کنید</p>
+            </>
+          ) : (
+            <p className="muted">{hint}</p>
           )}
         </div>
       </div>

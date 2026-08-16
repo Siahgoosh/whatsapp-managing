@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 import { config } from "../../config/index.js";
 import { securityHeaders, apiLimiter } from "./middleware/security.js";
 import { attachSession } from "./middleware/auth.js";
-import { csrfProtect, originCheck } from "./middleware/csrf.js";
+import { csrfProtect, originCheck, isAllowedOrigin } from "./middleware/csrf.js";
 import { authRouter } from "./routes/auth.js";
 import { whatsappRouter } from "./routes/whatsapp.js";
 import { groupsRouter } from "./routes/groups.js";
@@ -29,7 +29,7 @@ export function createApp() {
   app.use(securityHeaders());
   app.use(
     cors({
-      origin: config.corsOrigin,
+      origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
       credentials: true
     })
   );

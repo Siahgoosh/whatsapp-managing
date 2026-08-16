@@ -12,24 +12,27 @@ whatsappRouter.use(requireAuth);
 whatsappRouter.get(
   "/status",
   asyncHandler(async (req, res) => {
-    res.json(waManager.primary().publicStatus());
+    const client = waManager.primary();
+    res.json({ ...client.publicStatus(), qr: client.getQr() });
   })
 );
 
 whatsappRouter.get(
   "/qr",
   asyncHandler(async (req, res) => {
-    const qr = waManager.primary().getQr();
-    res.json({ qr: qr || null, status: waManager.primary().status });
+    const client = waManager.primary();
+    res.json({ qr: client.getQr(), status: client.status });
   })
 );
 
 whatsappRouter.post(
   "/connect",
   asyncHandler(async (req, res) => {
-    await waManager.primary().start();
+    const client = waManager.primary();
+    await client.start({ force: true });
+    const qr = await client.waitForQr(15000);
     systemLog("whatsapp_connect", "Connect requested", { userId: req.user.id, ip: req.ip });
-    res.json(waManager.primary().publicStatus());
+    res.json({ ...client.publicStatus(), qr: qr || client.getQr() });
   })
 );
 

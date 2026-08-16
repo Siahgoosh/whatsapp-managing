@@ -52,7 +52,7 @@ export function setSessionCookie(res, sid, expiresAt) {
     "SameSite=Lax",
     `Max-Age=${Math.floor((expiresAt - Date.now()) / 1000)}`
   ];
-  if (!config.isDev && !config.isTest) parts.push("Secure");
+  if (config.isHttps) parts.push("Secure");
   res.append("Set-Cookie", parts.join("; "));
 }
 

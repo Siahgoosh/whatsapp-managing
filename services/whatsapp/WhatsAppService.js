@@ -81,23 +81,48 @@ export class WhatsAppService extends EventEmitter {
   }
 
   getQr() {
-    if (this.status !== "qr_required" && this.status !== "connecting") return null;
-    return this.qrDataUrl;
+    return this.qrDataUrl || null;
   }
 
   sessionDir() {
     return path.join(config.paths.sessions, this.sessionKey);
   }
 
-  async start() {
-    if (this.starting || this.sock) return;
+  async waitForQr(ms = 15000) {
+    const started = Date.now();
+    while (Date.now() - started < ms) {
+      if (this.qrDataUrl) return this.qrDataUrl;
+      if (this.status === "connected" || this.status === "authentication_failed") return null;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return this.qrDataUrl;
+  }
+
+  async start({ force = false } = {}) {
+    if (this.starting) {
+      await this.waitForQr(8000);
+      return;
+    }
+    if (this.sock && !force && (this.status === "connected" || this.status === "qr_required")) return;
+    if (this.sock) {
+      try {
+        this.sock.ev.removeAllListeners();
+        this.sock.ws?.close();
+      } catch {
+        /* ignore */
+      }
+      this.sock = null;
+    }
     this.starting = true;
     this.shouldReconnect = true;
     fs.mkdirSync(this.sessionDir(), { recursive: true });
     this.setStatus(this.hasAuthFiles() ? "reconnecting" : "connecting");
     try {
       const { state, saveCreds } = await useMultiFileAuthState(this.sessionDir());
-      const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1027934701] }));
+      const { version } = await Promise.race([
+        fetchLatestBaileysVersion(),
+        new Promise((resolve) => setTimeout(() => resolve({ version: [2, 3000, 1027934701] }), 5000))
+      ]).catch(() => ({ version: [2, 3000, 1027934701] }));
       this.sock = makeWASocket({
         version,
         auth: state,
@@ -105,7 +130,8 @@ export class WhatsAppService extends EventEmitter {
         browser: Browsers.ubuntu("Chrome"),
         syncFullHistory: false,
         markOnlineOnConnect: false,
-        generateHighQualityLinkPreview: false
+        generateHighQualityLinkPreview: false,
+        connectTimeoutMs: 25000
       });
       this.sock.ev.on("creds.update", saveCreds);
       this.sock.ev.on("connection.update", (u) => this.onConnection(u));

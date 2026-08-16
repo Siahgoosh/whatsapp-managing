@@ -3,7 +3,6 @@ import rateLimit from "express-rate-limit";
 import { config } from "../../../config/index.js";
 
 export function securityHeaders() {
-  const isHttps = String(config.appUrl || "").startsWith("https://");
   return helmet({
     contentSecurityPolicy: {
       useDefaults: true,
@@ -17,10 +16,10 @@ export function securityHeaders() {
         "object-src": ["'none'"],
         "base-uri": ["'self'"],
         "frame-ancestors": ["'none'"],
-        "upgrade-insecure-requests": isHttps ? [] : null
+        "upgrade-insecure-requests": config.isHttps ? [] : null
       }
     },
-    hsts: isHttps ? { maxAge: 15552000, includeSubDomains: true } : false,
+    hsts: config.isHttps ? { maxAge: 15552000, includeSubDomains: true } : false,
     crossOriginEmbedderPolicy: false
   });
 }

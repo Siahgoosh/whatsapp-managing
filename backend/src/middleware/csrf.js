@@ -14,13 +14,25 @@ export function csrfProtect(req, res, next) {
   next();
 }
 
+export function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  const normalized = String(origin).replace(/\/$/, "");
+  const allowed = [config.corsOrigin, config.appUrl, `http://127.0.0.1:${config.port}`, `http://localhost:${config.port}`]
+    .filter(Boolean)
+    .map((o) => String(o).replace(/\/$/, ""));
+  if (allowed.includes(normalized)) return true;
+  try {
+    const u = new URL(origin);
+    return String(u.port || (u.protocol === "https:" ? "443" : "80")) === String(config.port);
+  } catch {
+    return false;
+  }
+}
+
 export function originCheck(req, res, next) {
   if (SAFE.has(req.method)) return next();
   if (config.isDev || config.isTest) return next();
-  const origin = req.headers.origin;
-  if (!origin) return next();
-  const allowed = [config.corsOrigin, config.appUrl, `http://127.0.0.1:${config.port}`].filter(Boolean);
-  if (allowed.length && origin && !allowed.some((o) => origin.startsWith(String(o).replace(/\/$/, "")))) {
+  if (!isAllowedOrigin(req.headers.origin)) {
     return next(new HttpError(403, "Origin مجاز نیست", "origin"));
   }
   next();
