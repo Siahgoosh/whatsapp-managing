@@ -407,27 +407,56 @@ export class WhatsAppService extends EventEmitter {
   }
 
   listGroups({ q = "", favorite, admin } = {}) {
-    const session = this.row();
-    let sql = `
-      SELECT g.*,
-        COALESCE(
-          g.last_activity_at,
-          (SELECT MAX(created_at) FROM inbox_messages im WHERE im.chat_id = g.wa_id)
-        ) AS last_activity_at,
-        COALESCE(gp.advertising_permission, g.advertising_permission, 'unknown') AS advertising_permission
-      FROM groups g
-      LEFT JOIN group_permissions gp ON gp.group_id = g.id
-      WHERE g.session_id = ? AND g.membership_status = 'member'
-    `;
-    const params = [session.id];
+    const session =
+      this.row() || getDb().prepare("SELECT * FROM whatsapp_sessions WHERE session_key = 'default'").get();
+    if (!session) return [];
+
+    const decorate = (row) => ({
+      ...row,
+      last_activity_at: row.activity_at || row.last_activity_at || null
+    });
+
+    const run = (sql, params) => getDb().prepare(sql).all(...params).map(decorate);
+
+    const extra = [];
+    const extraParams = [];
     if (q) {
-      sql += " AND (g.name LIKE ? OR g.city LIKE ?)";
-      params.push(`%${q}%`, `%${q}%`);
+      extra.push(" AND (g.name LIKE ? OR IFNULL(g.city, '') LIKE ?)");
+      extraParams.push(`%${q}%`, `%${q}%`);
     }
-    if (favorite === true || favorite === "1") sql += " AND g.is_favorite = 1";
-    if (admin === true || admin === "1") sql += " AND g.is_admin = 1";
-    sql += " ORDER BY last_activity_at DESC, g.is_favorite DESC, g.name COLLATE NOCASE ASC";
-    return getDb().prepare(sql).all(...params);
+    if (favorite === true || favorite === "1") extra.push(" AND g.is_favorite = 1");
+    if (admin === true || admin === "1") extra.push(" AND g.is_admin = 1");
+    const extraSql = extra.join("");
+
+    const select = `SELECT g.*,
+         COALESCE(
+           g.last_activity_at,
+           (SELECT MAX(created_at) FROM inbox_messages im WHERE im.chat_id = g.wa_id)
+         ) AS activity_at,
+         COALESCE(gp.advertising_permission, g.advertising_permission, 'unknown') AS advertising_permission
+       FROM groups g
+       LEFT JOIN group_permissions gp ON gp.group_id = g.id`;
+    const order = " ORDER BY activity_at DESC, g.is_favorite DESC, g.name COLLATE NOCASE ASC";
+
+    try {
+      const scoped = run(
+        `${select} WHERE g.session_id = ? AND g.membership_status = 'member'${extraSql}${order}`,
+        [session.id, ...extraParams]
+      );
+      if (scoped.length) return scoped;
+      return run(
+        `${select} WHERE g.membership_status = 'member'${extraSql}${order}`,
+        extraParams
+      );
+    } catch (err) {
+      logger.warn({ err: err.message }, "group list query failed; using simple membership list");
+      const rows = getDb()
+        .prepare(
+          `SELECT * FROM groups WHERE membership_status = 'member' ORDER BY name COLLATE NOCASE ASC`
+        )
+        .all();
+      return rows.sort((a, b) => String(b.last_activity_at || "").localeCompare(String(a.last_activity_at || "")));
+    }
   }
 
   async sendToGroup({ waId, text, caption, attachmentRel }) {

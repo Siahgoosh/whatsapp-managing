@@ -12,12 +12,19 @@ groupsRouter.use(requireAuth);
 groupsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const groups = waManager.primary().listGroups({
-      q: req.query.q || "",
-      favorite: req.query.favorite,
-      admin: req.query.admin
-    });
-    res.json({ groups });
+    let groups = [];
+    try {
+      groups = waManager.primary().listGroups({
+        q: req.query.q || "",
+        favorite: req.query.favorite,
+        admin: req.query.admin
+      });
+    } catch (err) {
+      groups = getDb()
+        .prepare("SELECT * FROM groups WHERE membership_status = 'member' ORDER BY name COLLATE NOCASE")
+        .all();
+    }
+    res.json({ groups, count: groups.length });
   })
 );
 

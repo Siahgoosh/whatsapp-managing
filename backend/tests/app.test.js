@@ -100,6 +100,19 @@ test("groups for campaigns are listed with newest last message first", async () 
   );
 });
 
+test("campaign group picker still lists members if they are on another session row", async () => {
+  const { app } = setupApp();
+  seedGroups(2);
+  const other = getDb()
+    .prepare("INSERT INTO whatsapp_sessions (session_key, label, status) VALUES ('other', 'other', 'disconnected')")
+    .run();
+  getDb().prepare("UPDATE groups SET session_id = ?").run(Number(other.lastInsertRowid));
+  const { agent } = await login(app);
+  const res = await agent.get("/api/groups");
+  assert.equal(res.status, 200);
+  assert.equal(res.body.groups.length, 2);
+});
+
 test("campaign rejects delay below conservative minimum in production config", async () => {
   const { app } = setupApp();
   const { ids, sessionId } = seedGroups(1);

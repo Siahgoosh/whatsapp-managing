@@ -34,16 +34,36 @@ export function WizardPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [limits, setLimits] = useState({ minDelaySeconds: 3, maxDelaySeconds: 30 });
 
-  useEffect(() => {
-    api.groups().then((d) => {
-      const list = d.groups || [];
+  const [loadError, setLoadError] = useState("");
+
+  async function loadGroups() {
+    setLoadError("");
+    try {
+      const d = await api.groups();
+      const list = Array.isArray(d.groups) ? d.groups : [];
       setGroups(list);
-      setSelected(new Set(list.filter((g) => g.advertising_permission === "approved").map((g) => g.id)));
-    });
-    api.settings().then((d) => setLimits(d.limits || limits));
+      setSelected((prev) => {
+        if (prev.size) return prev;
+        return new Set(list.filter((g) => g.advertising_permission === "approved").map((g) => g.id));
+      });
+      return list;
+    } catch (e) {
+      setLoadError(e.message || "بارگذاری گروه‌ها ناموفق بود");
+      pushToast(e.message || "بارگذاری گروه‌ها ناموفق بود");
+      return [];
+    }
+  }
+
+  useEffect(() => {
+    loadGroups();
+    api.settings().then((d) => setLimits(d.limits || limits)).catch(() => {});
   }, []);
 
-  const visible = groups.filter((g) => g.name.includes(q));
+  useEffect(() => {
+    if (step === 3) loadGroups();
+  }, [step]);
+
+  const visible = groups.filter((g) => String(g.name || "").includes(q));
   const est = useMemo(() => {
     const n = selected.size;
     const avg = random ? (Number(delayMin) + Number(delayMax)) / 2 : Number(delayMin);
@@ -142,7 +162,7 @@ export function WizardPage() {
               <span className="badge">Selected Groups: {selected.size}</span>
             </div>
             <p className="muted">گروه‌ها بر اساس آخرین پیام مرتب شده‌اند؛ گروه‌های خیلی قدیمی پایین لیست هستند.</p>
-            <div className="grid" style={{ marginTop: 12, maxHeight: 360, overflow: "auto" }}>
+            <div style={{ marginTop: 12, maxHeight: 420, overflow: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
               {visible.map((g) => (
                 <label key={g.id} className="group-item">
                   <input type="checkbox" checked={selected.has(g.id)} onChange={() => {
@@ -151,7 +171,7 @@ export function WizardPage() {
                     setSelected(n);
                   }} />
                   <span style={{ flex: 1 }}>
-                    {g.name}
+                    {g.name || "بدون نام"}
                     <div className="muted" style={{ fontSize: 12 }}>آخرین پیام: {activityAgo(g.last_activity_at)}</div>
                   </span>
                   {g.advertising_permission === "approved" ? (
@@ -161,8 +181,28 @@ export function WizardPage() {
                   )}
                 </label>
               ))}
+              {!visible.length && (
+                <div className="card" style={{ textAlign: "center" }}>
+                  <p>{loadError || (groups.length ? "با این جستجو گروهی پیدا نشد." : "گروهی در فهرست عضویت نیست.")}</p>
+                  <div className="row" style={{ justifyContent: "center" }}>
+                    <button
+                      className="btn"
+                      onClick={async () => {
+                        try {
+                          await api.syncGroups();
+                        } catch (e) {
+                          pushToast(e.message);
+                        }
+                        await loadGroups();
+                      }}
+                    >
+                      همگام‌سازی گروه‌های واتساپ
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <p className="muted">به‌صورت پیش‌فرض فقط گروه‌های Joined با Advertising Permission = Approved انتخاب می‌شوند.</p>
+            <p className="muted">به‌صورت پیش‌فرض فقط گروه‌های Joined با Advertising Permission = Approved انتخاب می‌شوند. اگر لیست خالی است، همگام‌سازی را بزنید.</p>
           </>
         )}
         {step === 4 && (
