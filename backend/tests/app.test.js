@@ -86,6 +86,20 @@ test("groups search/filter and membership-only list", async () => {
   assert.equal(res.body.groups.length, 1);
 });
 
+test("groups for campaigns are listed with newest last message first", async () => {
+  const { app } = setupApp();
+  const { ids } = seedGroups(3);
+  getDb().prepare("UPDATE groups SET last_activity_at = ? WHERE id = ?").run("2024-01-01 00:00:00", ids[0]);
+  getDb().prepare("UPDATE groups SET last_activity_at = ? WHERE id = ?").run("2026-08-18 12:00:00", ids[1]);
+  getDb().prepare("UPDATE groups SET last_activity_at = NULL WHERE id = ?").run(ids[2]);
+  const { agent } = await login(app);
+  const res = await agent.get("/api/groups");
+  assert.deepEqual(
+    res.body.groups.map((g) => g.id),
+    [ids[1], ids[0], ids[2]]
+  );
+});
+
 test("campaign rejects delay below conservative minimum in production config", async () => {
   const { app } = setupApp();
   const { ids, sessionId } = seedGroups(1);

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
+import { activityAgo } from "../format.js";
 import { useApp } from "../store.jsx";
 
 export function GroupsPage() {
@@ -67,7 +68,7 @@ export function GroupsPage() {
               <div style={{ flex: 1 }}>
                 <b>{g.name}</b>
                 <div className="muted" style={{ fontSize: 12 }}>
-                  {g.wa_id} · اعضا: {g.member_count ?? "—"} · {g.is_admin ? "ادمین" : "عضو"} · {g.membership_status}
+                  آخرین پیام: {activityAgo(g.last_activity_at)} · اعضا: {g.member_count ?? "—"} · {g.is_admin ? "ادمین" : "عضو"}
                   {g.city ? ` · ${g.city}` : ""} · مدیران: {g.admin_count ?? "—"}
                 </div>
               </div>

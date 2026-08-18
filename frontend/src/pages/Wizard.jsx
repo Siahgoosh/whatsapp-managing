@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
+import { activityAgo } from "../format.js";
 import { useApp } from "../store.jsx";
 
 const STEPS = [
@@ -140,6 +141,7 @@ export function WizardPage() {
               <button className="btn secondary" onClick={() => setSelected(new Set())}>هیچکدام</button>
               <span className="badge">Selected Groups: {selected.size}</span>
             </div>
+            <p className="muted">گروه‌ها بر اساس آخرین پیام مرتب شده‌اند؛ گروه‌های خیلی قدیمی پایین لیست هستند.</p>
             <div className="grid" style={{ marginTop: 12, maxHeight: 360, overflow: "auto" }}>
               {visible.map((g) => (
                 <label key={g.id} className="group-item">
@@ -148,7 +150,10 @@ export function WizardPage() {
                     n.has(g.id) ? n.delete(g.id) : n.add(g.id);
                     setSelected(n);
                   }} />
-                  <span>{g.name}</span>
+                  <span style={{ flex: 1 }}>
+                    {g.name}
+                    <div className="muted" style={{ fontSize: 12 }}>آخرین پیام: {activityAgo(g.last_activity_at)}</div>
+                  </span>
                   {g.advertising_permission === "approved" ? (
                     <span className="badge ok">🟢 Permission Granted</span>
                   ) : (

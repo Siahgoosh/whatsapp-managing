@@ -426,7 +426,7 @@ export class WhatsAppService extends EventEmitter {
     }
     if (favorite === true || favorite === "1") sql += " AND g.is_favorite = 1";
     if (admin === true || admin === "1") sql += " AND g.is_admin = 1";
-    sql += " ORDER BY g.is_favorite DESC, g.name COLLATE NOCASE ASC";
+    sql += " ORDER BY last_activity_at DESC, g.is_favorite DESC, g.name COLLATE NOCASE ASC";
     return getDb().prepare(sql).all(...params);
   }
 

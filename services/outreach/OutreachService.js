@@ -79,7 +79,7 @@ export class OutreachService {
       sql += " AND (g.name LIKE ? OR g.city LIKE ? OR g.wa_id LIKE ?)";
       params.push(`%${q}%`, `%${q}%`, `%${q}%`);
     }
-    sql += " ORDER BY g.is_favorite DESC, g.name COLLATE NOCASE ASC";
+    sql += " ORDER BY last_activity_at DESC, g.is_favorite DESC, g.name COLLATE NOCASE ASC";
     return getDb().prepare(sql).all(...params);
   }
 

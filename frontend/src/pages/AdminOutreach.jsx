@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
+import { activityAgo } from "../format.js";
 import { statusFa, useApp } from "../store.jsx";
 
 const PIPELINE = [
@@ -214,7 +215,7 @@ export function AdminOutreach() {
                   <div className="muted" style={{ fontSize: 12 }}>
                     {g.wa_id} · اعضا: {g.member_count ?? "—"} · مدیران: {g.admin_count ?? "—"} · شهر: {g.city || "سایر"}
                     <br />
-                    آخرین فعالیت: {g.last_activity_at || "—"} · {g.membership_status}
+                    آخرین پیام: {activityAgo(g.last_activity_at)} · {g.membership_status}
                   </div>
                 </div>
                 {permBadge(g.advertising_permission)}

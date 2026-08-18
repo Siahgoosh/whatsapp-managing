@@ -49,12 +49,19 @@ export class CampaignService {
     if (!groupIds.length) throw new HttpError(400, "حداقل یک گروه مجاز انتخاب کنید");
     const groups = getDb()
       .prepare(
-        `SELECT * FROM groups WHERE id IN (${groupIds.map(() => "?").join(",")}) AND session_id = ? AND membership_status = 'member'`
+        `SELECT g.*,
+           COALESCE(
+             g.last_activity_at,
+             (SELECT MAX(created_at) FROM inbox_messages im WHERE im.chat_id = g.wa_id)
+           ) AS last_activity_at
+         FROM groups g
+         WHERE g.id IN (${groupIds.map(() => "?").join(",")}) AND g.session_id = ? AND g.membership_status = 'member'`
       )
       .all(...groupIds, session.id);
     if (groups.length !== groupIds.length) {
       throw new HttpError(400, "فقط گروه‌هایی که حساب در آن‌ها عضو است قابل انتخاب هستند");
     }
+    groups.sort((a, b) => String(b.last_activity_at || "").localeCompare(String(a.last_activity_at || "")));
     const info = getDb()
       .prepare(
         `INSERT INTO campaigns
