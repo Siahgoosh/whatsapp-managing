@@ -98,5 +98,8 @@ export const api = {
   discoveryConfirmJoin: (id) => request(`/api/discovery/${id}/confirm-join`, { method: "POST", body: "{}" }),
   discoveryAdd: (id) => request(`/api/discovery/${id}/add-to-manager`, { method: "POST", body: "{}" }),
   discoveryNotes: (id, body) => request(`/api/discovery/${id}/notes`, { method: "POST", body: JSON.stringify({ body }) }),
-  discoveryRefresh: () => request("/api/discovery/refresh-joined", { method: "POST", body: "{}" })
+  discoveryRefresh: () => request("/api/discovery/refresh-joined", { method: "POST", body: "{}" }),
+  discoveryScan: () => request("/api/discovery/scan", { method: "POST", body: "{}" }),
+  discoveryCopy: (ids) => request("/api/discovery/copy-text", { method: "POST", body: JSON.stringify({ ids }) }),
+  discoveryShare: (body) => request("/api/discovery/share", { method: "POST", body: JSON.stringify(body) })
 };

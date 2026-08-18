@@ -1,9 +1,12 @@
 import { getDb } from "../../database/index.js";
+import { config } from "../../config/index.js";
+import { HttpError } from "../../backend/src/utils/errors.js";
 import { inferCityFromName } from "../finder/cities.js";
 import { extractInviteLinks } from "../finder/links.js";
 import { validateInvite } from "../finder/validate.js";
 import { notificationService } from "../notifications/NotificationService.js";
 import { nowSql } from "../../backend/src/utils/persian.js";
+import { formatShareLinks, phoneToWhatsAppJid } from "./phone.js";
 
 function normName(s) {
   return String(s || "")
@@ -31,6 +34,7 @@ function joinedStatusFor(groupName) {
 export class GroupLinkMonitor {
   constructor() {
     this.io = null;
+    this.scanning = false;
   }
 
   attach(io) {
@@ -115,16 +119,18 @@ export class GroupLinkMonitor {
     getDb()
       .prepare("INSERT INTO group_join_queue (discovered_id, status) VALUES (?, 'pending_review')")
       .run(row.id);
-    notificationService.create({
-      type: "group_discovered",
-      title: "New Group Discovered",
-      body: `${groupName || url} از ${sourceGroupName || "گروه عضو"}`
-    });
+    if (foundBy !== "member_group_scan") {
+      notificationService.create({
+        type: "group_discovered",
+        title: "New Group Discovered",
+        body: `${groupName || url} از ${sourceGroupName || "گروه عضو"}`
+      });
+    }
     this.emit("discovery:new", row);
     return { ...row, duplicate: false, discovery: "new_group_discovered" };
   }
 
-  list({ q = "", status = "", joinStatus = "" } = {}) {
+  list({ q = "", status = "", joinStatus = "", suggested = false } = {}) {
     let sql = "SELECT * FROM discovered_group_links WHERE 1=1";
     const params = [];
     if (q) {
@@ -138,6 +144,9 @@ export class GroupLinkMonitor {
     if (joinStatus) {
       sql += " AND join_status = ?";
       params.push(joinStatus);
+    }
+    if (suggested) {
+      sql += " AND validation_status = 'valid' AND join_status != 'joined'";
     }
     sql += " ORDER BY id DESC";
     return getDb().prepare(sql).all(...params).map((row) => this.decorate(row));
@@ -290,6 +299,113 @@ export class GroupLinkMonitor {
       .run(userId || null, latest.id);
     const group = getDb().prepare("SELECT * FROM groups WHERE id = ?").get(match.id);
     return { group, discovered: this.get(id) };
+  }
+
+  async scanMemberGroups(wa) {
+    if (this.scanning) throw new HttpError(409, "اسکن در حال اجراست", "scan_running");
+    this.scanning = true;
+    const session = this.session();
+    if (!session) throw new HttpError(400, "نشست واتساپ پیدا نشد");
+    const groups = getDb()
+      .prepare("SELECT * FROM groups WHERE session_id = ? AND membership_status = 'member' ORDER BY name COLLATE NOCASE")
+      .all(session.id)
+      .slice(0, 80);
+    const delayMs = config.isTest ? 0 : 600;
+    let texts = 0;
+    let newLinks = 0;
+    let duplicates = 0;
+    let validJoinable = 0;
+    try {
+      for (let i = 0; i < groups.length; i++) {
+        const group = groups[i];
+        this.emit("discovery:scan-progress", {
+          current: i + 1,
+          total: groups.length,
+          groupName: group.name
+        });
+        let chunks = [];
+        if (wa?.collectInviteSourceTexts) {
+          chunks = await wa.collectInviteSourceTexts(group);
+        } else {
+          chunks = getDb()
+            .prepare("SELECT body FROM inbox_messages WHERE chat_id = ? ORDER BY id DESC LIMIT 80")
+            .all(group.wa_id)
+            .map((r) => r.body)
+            .filter(Boolean);
+        }
+        texts += chunks.length;
+        const seen = new Set();
+        for (const chunk of chunks) {
+          for (const url of extractInviteLinks(chunk)) {
+            if (seen.has(url)) continue;
+            seen.add(url);
+            const row = await this.ingest({
+              url,
+              sessionId: session.id,
+              sourceGroupId: group.id,
+              sourceGroupName: group.name,
+              senderName: "",
+              foundBy: "member_group_scan"
+            });
+            if (row.duplicate) duplicates += 1;
+            else newLinks += 1;
+          }
+        }
+        if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+      }
+      this.refreshJoined();
+      validJoinable = this.list({ suggested: true }).length;
+      this.emit("discovery:scan-progress", { current: groups.length, total: groups.length, done: true });
+      return {
+        groupsScanned: groups.length,
+        texts,
+        newLinks,
+        duplicates,
+        validJoinable
+      };
+    } finally {
+      this.scanning = false;
+    }
+  }
+
+  rowsForShare(ids) {
+    const unique = [...new Set((ids || []).map(Number).filter(Boolean))];
+    if (!unique.length) throw new HttpError(400, "لینکی انتخاب نشده است");
+    if (unique.length > 40) throw new HttpError(400, "حداکثر ۴۰ لینک در هر ارسال");
+    const placeholders = unique.map(() => "?").join(",");
+    const rows = getDb()
+      .prepare(
+        `SELECT * FROM discovered_group_links WHERE id IN (${placeholders}) AND validation_status = 'valid'`
+      )
+      .all(...unique);
+    if (!rows.length) throw new HttpError(400, "لینک معتبر و قابل عضویت انتخاب نشده است");
+    return rows;
+  }
+
+  exportText(ids) {
+    const rows = Array.isArray(ids) ? this.rowsForShare(ids) : this.list({ suggested: true });
+    if (!rows.length) throw new HttpError(400, "لینک معتبری برای کپی نیست");
+    return { text: formatShareLinks(rows), count: rows.length, urls: rows.map((r) => r.normalized_url) };
+  }
+
+  async shareToContact({ ids, to, confirm, confirmCount, wa, userId }) {
+    if (!confirm) throw new HttpError(400, "ارسال بدون تأیید صریح مجاز نیست", "confirm_required");
+    const jid = phoneToWhatsAppJid(to);
+    if (!jid) throw new HttpError(400, "شماره مخاطب نامعتبر است");
+    const rows = this.rowsForShare(ids);
+    if (Number(confirmCount) !== rows.length) {
+      throw new HttpError(400, "تعداد تأیید با لینک‌های انتخاب‌شده یکی نیست", "confirm_mismatch");
+    }
+    if (!wa?.sendChat) throw new HttpError(409, "واتساپ متصل نیست");
+    const text = formatShareLinks(rows);
+    await wa.sendChat({ chatId: jid, text });
+    getDb()
+      .prepare(
+        `INSERT INTO inbox_messages (session_id, chat_id, chat_name, chat_type, direction, body, unread)
+         VALUES (?, ?, ?, 'contact', 'out', ?, 0)`
+      )
+      .run(this.session().id, jid, to, text.slice(0, 8000));
+    return { ok: true, chatId: jid, count: rows.length, text };
   }
 
   analytics() {

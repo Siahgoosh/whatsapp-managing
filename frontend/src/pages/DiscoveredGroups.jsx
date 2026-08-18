@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { io } from "socket.io-client";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { statusFa, useApp } from "../store.jsx";
@@ -15,11 +16,19 @@ export function DiscoveredGroups() {
   const [rows, setRows] = useState([]);
   const [analytics, setAnalytics] = useState({});
   const [q, setQ] = useState("");
+  const [onlyJoinable, setOnlyJoinable] = useState(true);
   const [review, setReview] = useState(null);
+  const [picked, setPicked] = useState(new Set());
+  const [scanning, setScanning] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTo, setShareTo] = useState("");
+  const [sharePreview, setSharePreview] = useState("");
 
   async function load() {
     const p = new URLSearchParams();
     if (q) p.set("q", q);
+    if (onlyJoinable) p.set("suggested", "1");
     const qs = p.toString() ? `?${p}` : "";
     const d = await api.discovery(qs);
     setRows(d.groups || []);
@@ -28,7 +37,38 @@ export function DiscoveredGroups() {
 
   useEffect(() => {
     load().catch((e) => pushToast(e.message));
+    const socket = io({ withCredentials: true });
+    socket.on("discovery:scan-progress", setProgress);
+    return () => socket.close();
   }, []);
+
+  useEffect(() => {
+    load().catch(() => {});
+  }, [onlyJoinable]);
+
+  const selectedRows = useMemo(() => rows.filter((r) => picked.has(r.id)), [rows, picked]);
+
+  function toggle(id) {
+    const n = new Set(picked);
+    n.has(id) ? n.delete(id) : n.add(id);
+    setPicked(n);
+  }
+
+  async function scanNow() {
+    setScanning(true);
+    setProgress({ current: 0, total: 0 });
+    try {
+      const r = await api.discoveryScan();
+      pushToast(`اسکن شد: ${r.groupsScanned} گروه — لینک جدید ${r.newLinks} — قابل عضویت ${r.validJoinable}`);
+      setOnlyJoinable(true);
+      await load();
+    } catch (e) {
+      pushToast(e.message);
+    } finally {
+      setScanning(false);
+      setProgress(null);
+    }
+  }
 
   async function openJoin(row) {
     try {
@@ -40,35 +80,89 @@ export function DiscoveredGroups() {
     }
   }
 
+  function shareableIds() {
+    const source = selectedRows.length ? selectedRows : rows;
+    return source.filter((r) => r.validation_status === "valid").map((r) => r.id).slice(0, 40);
+  }
+
+  async function copyLinks(ids) {
+    if (Array.isArray(ids) && !ids.length) {
+      pushToast("ابتدا لینک‌ها را انتخاب کنید");
+      return;
+    }
+    try {
+      const r = await api.discoveryCopy(ids);
+      await navigator.clipboard.writeText(r.text);
+      pushToast(`${r.count} لینک کپی شد — می‌توانید همان متن را در واتساپ برای کسی بفرستید`);
+    } catch (e) {
+      pushToast(e.message);
+    }
+  }
+
+  async function openShare() {
+    const ids = shareableIds();
+    try {
+      const r = await api.discoveryCopy(ids);
+      setSharePreview(r.text);
+      setShareOpen(true);
+    } catch (e) {
+      pushToast(e.message);
+    }
+  }
+
   return (
     <div>
       <div className="topbar">
         <div>
-          <h2>Discovered Groups</h2>
-          <p className="muted">لینک‌های chat.whatsapp.com که در گروه‌های عضو شما ارسال شده‌اند. Join خودکار انجام نمی‌شود.</p>
+          <h2>گروه‌های کشف‌شده</h2>
+          <p className="muted">
+            همهٔ گروه‌هایی که عضو هستید برای لینک عمومی قابل عضویت اسکن می‌شوند. با «عضو شو» لینک در واتساپ باز می‌شود و Join را خودتان تأیید می‌کنید. همان لینک‌ها را می‌توانید کپی کنید یا یکجا برای یک نفر بفرستید.
+          </p>
         </div>
-        <button className="btn secondary" onClick={() => api.discoveryRefresh().then(load)}>بروزرسانی عضویت</button>
+        <div className="row">
+          <button className="btn" disabled={scanning} onClick={scanNow}>
+            {scanning ? "در حال اسکن..." : "اسکن همه گروه‌ها همین الان"}
+          </button>
+          <button className="btn secondary" onClick={() => api.discoveryRefresh().then(load)}>بروزرسانی عضویت</button>
+        </div>
       </div>
+
+      {progress && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          اسکن {progress.current || 0} از {progress.total || "…"}
+          {progress.groupName ? ` — ${progress.groupName}` : ""}
+        </div>
+      )}
 
       <div className="grid stats">
         <div className="card stat">Links Found<b>{analytics.linksFound ?? 0}</b></div>
+        <div className="card stat">قابل عضویت<b>{analytics.valid ?? 0}</b></div>
         <div className="card stat">New Groups<b>{analytics.newGroups ?? 0}</b></div>
         <div className="card stat">Already Joined<b>{analytics.alreadyJoined ?? 0}</b></div>
         <div className="card stat">Pending Review<b>{analytics.pendingReview ?? 0}</b></div>
-        <div className="card stat">Approved Groups<b>{analytics.approvedGroups ?? 0}</b></div>
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="row">
           <input className="input" style={{ maxWidth: 280 }} placeholder="جستجو" value={q} onChange={(e) => setQ(e.target.value)} />
           <button className="btn secondary" onClick={load}>جستجو</button>
+          <label className="row">
+            <input type="checkbox" checked={onlyJoinable} onChange={(e) => setOnlyJoinable(e.target.checked)} />
+            فقط لینک معتبر و هنوز عضو نیستم
+          </label>
+          <button className="btn secondary" onClick={() => setPicked(new Set(rows.map((r) => r.id)))}>انتخاب همه</button>
+          <button className="btn secondary" onClick={() => setPicked(new Set())}>هیچکدام</button>
+          <button className="btn secondary" onClick={() => copyLinks(selectedRows.map((r) => r.id))}>کپی لینک‌های انتخاب‌شده</button>
+          <button className="btn secondary" onClick={() => copyLinks()}>کپی همه پیشنهادها</button>
+          <button className="btn" onClick={openShare}>ارسال یکجا در واتساپ</button>
+          <span className="badge">{picked.size} انتخاب‌شده</span>
         </div>
         <table className="table" style={{ marginTop: 12 }}>
           <thead>
             <tr>
+              <th></th>
               <th>Group Link</th>
               <th>Source Group</th>
-              <th>Sender</th>
               <th>Date Found</th>
               <th>Validation</th>
               <th>Join Status</th>
@@ -79,15 +173,17 @@ export function DiscoveredGroups() {
             {rows.map((g) => (
               <tr key={g.id}>
                 <td>
+                  <input type="checkbox" checked={picked.has(g.id)} onChange={() => toggle(g.id)} />
+                </td>
+                <td>
                   <b>{g.group_name || "Information unavailable"}</b>
                   <div className="muted" style={{ fontSize: 12 }}>{g.normalized_url}</div>
                   <div className="muted">Found By: {g.found_by} · {g.city}</div>
                 </td>
                 <td>{g.source_group_name || "—"}</td>
-                <td>{g.sender_name || "—"}</td>
                 <td>{g.found_at}</td>
                 <td>
-                  {g.validation_status === "valid" ? <span className="badge ok">🟢 Valid</span> : null}
+                  {g.validation_status === "valid" ? <span className="badge ok">🟢 Valid / قابل عضویت</span> : null}
                   {g.validation_status === "invalid" ? <span className="badge danger">🔴 Invalid</span> : null}
                   {g.validation_status !== "valid" && g.validation_status !== "invalid" ? (
                     <span className="badge">{statusFa(g.validation_status)}</span>
@@ -95,10 +191,10 @@ export function DiscoveredGroups() {
                 </td>
                 <td>{JOIN_LABEL[g.join_status] || JOIN_LABEL.unknown}</td>
                 <td className="row">
-                  <button className="btn secondary" onClick={() => api.discoveryValidate(g.id).then(load)}>Validate</button>
-                  {g.validation_status === "valid" && (
-                    <button className="btn" onClick={() => openJoin(g)}>Review & Join</button>
+                  {g.validation_status === "valid" && g.join_status !== "joined" && (
+                    <button className="btn" onClick={() => openJoin(g)}>عضو شو</button>
                   )}
+                  <a className="btn secondary" href={g.normalized_url} target="_blank" rel="noreferrer">باز کردن لینک</a>
                   {g.join_status === "joined" && !g.added_to_manager && (
                     <button
                       className="btn"
@@ -118,22 +214,20 @@ export function DiscoveredGroups() {
             ))}
           </tbody>
         </table>
+        {!rows.length && <p className="muted">هنوز لینکی نیست. «اسکن همه گروه‌ها همین الان» را بزنید.</p>}
       </div>
 
       {review && (
         <div className="modal-back" onClick={() => setReview(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Review & Join</h3>
+            <h3>عضو شدن</h3>
             <p><b>{review.group_name || "Information unavailable"}</b></p>
             <p className="muted">{review.description || "Information unavailable"}</p>
-            <p>Source Group: {review.source_group_name}</p>
-            <p>Found By: {review.found_by}</p>
-            <p>Found At: {review.found_at}</p>
-            <p>لینک واتساپ در تب جدید باز شد. Join را خودتان در واتساپ تأیید کنید. سیستم گروهی را خودکار Join نمی‌کند.</p>
+            <p>لینک در واتساپ باز شد. Join را خودتان تأیید کنید. سیستم خودکار عضو نمی‌شود.</p>
             <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
-              <a className="btn secondary" href={review.normalized_url} target="_blank" rel="noreferrer">باز کردن دوباره لینک</a>
+              <a className="btn" href={review.normalized_url} target="_blank" rel="noreferrer">باز کردن لینک</a>
               <button
-                className="btn"
+                className="btn secondary"
                 onClick={async () => {
                   try {
                     const r = await api.discoveryConfirmJoin(review.id);
@@ -145,22 +239,45 @@ export function DiscoveredGroups() {
                   }
                 }}
               >
-                عضویت را در واتساپ تأیید کردم
+                عضویت را تأیید کردم
               </button>
-              {review.join_status === "joined" && (
-                <button
-                  className="btn"
-                  onClick={() =>
-                    api.discoveryAdd(review.id).then(() => {
-                      setReview(null);
-                      nav("/groups");
-                    }).catch((e) => pushToast(e.message))
-                  }
-                >
-                  Add To Marketing Groups
-                </button>
-              )}
               <button className="btn secondary" onClick={() => setReview(null)}>بستن</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {shareOpen && (
+        <div className="modal-back" onClick={() => setShareOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(640px, 100%)" }}>
+            <h3>ارسال یکجای لینک‌ها در واتساپ</h3>
+            <p className="muted">فقط به یک مخاطب، با تأیید شما. ارسال انبوه به افراد مختلف انجام نمی‌شود.</p>
+            <label>شماره مخاطب (مثال 0912…)</label>
+            <input className="input" value={shareTo} onChange={(e) => setShareTo(e.target.value)} placeholder="09121234567" />
+            <label style={{ marginTop: 10 }}>پیش‌نمایش پیام (حداکثر ۴۰ لینک)</label>
+            <textarea className="input" value={sharePreview} onChange={(e) => setSharePreview(e.target.value)} />
+            <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
+              <button className="btn secondary" onClick={() => setShareOpen(false)}>Cancel</button>
+              <button
+                className="btn"
+                onClick={async () => {
+                  const ids = shareableIds();
+                  try {
+                    await api.discoveryShare({
+                      ids,
+                      to: shareTo,
+                      confirm: true,
+                      confirmCount: ids.length
+                    });
+                    pushToast("لینک‌ها ارسال شد");
+                    setShareOpen(false);
+                  } catch (e) {
+                    pushToast(e.message);
+                  }
+                }}
+              >
+                تأیید و ارسال
+              </button>
             </div>
           </div>
         </div>

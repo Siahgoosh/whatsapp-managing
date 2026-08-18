@@ -473,6 +473,27 @@ export class WhatsAppService extends EventEmitter {
     return result;
   }
 
+  async collectInviteSourceTexts(group) {
+    const texts = [];
+    const inbox = getDb()
+      .prepare("SELECT body FROM inbox_messages WHERE chat_id = ? ORDER BY id DESC LIMIT 80")
+      .all(group.wa_id);
+    for (const row of inbox) {
+      if (row.body) texts.push(String(row.body));
+    }
+    if (this.isConnected() && this.sock?.groupMetadata) {
+      try {
+        const meta = await this.sock.groupMetadata(group.wa_id);
+        if (meta.desc) texts.push(String(meta.desc));
+        if (meta.subject) texts.push(String(meta.subject));
+        if (meta.inviteCode) texts.push(`https://chat.whatsapp.com/${meta.inviteCode}`);
+      } catch {
+        /* description may be hidden */
+      }
+    }
+    return texts;
+  }
+
   async sendChat({ chatId, text }) {
     this.assertConnected();
     return this.sock.sendMessage(chatId, { text });

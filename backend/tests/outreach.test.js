@@ -7,6 +7,7 @@ import { inferCityFromName } from "../../services/finder/cities.js";
 import { outreachService } from "../../services/outreach/OutreachService.js";
 import { groupLinkMonitor } from "../../services/outreach/GroupLinkMonitor.js";
 import { extractInviteLinks } from "../../services/finder/links.js";
+import { formatShareLinks, phoneToWhatsAppJid } from "../../services/outreach/phone.js";
 
 function mockAdmins(wa, extraRegularIgnored = true) {
   wa.fetchGroupAdmins = async (waId) => {
@@ -261,6 +262,76 @@ test("search filters admins by city permission and status", async () => {
     body: "قبل از ارسال فایل با مدیر هماهنگ شود."
   });
   assert.equal(notes.status, 200);
+});
+
+test("phone helper normalizes Iranian numbers for a single WhatsApp contact", () => {
+  assert.equal(phoneToWhatsAppJid("09121234567"), "989121234567@s.whatsapp.net");
+  assert.equal(phoneToWhatsAppJid("+98 912 123 4567"), "989121234567@s.whatsapp.net");
+  assert.equal(phoneToWhatsAppJid("12"), null);
+  const text = formatShareLinks([{ group_name: "املاک مهر", normalized_url: "https://chat.whatsapp.com/AbCdEfGhIjKlMnOp" }]);
+  assert.match(text, /املاک مهر/);
+  assert.match(text, /chat\.whatsapp\.com\/AbCdEfGhIjKlMnOp/);
+});
+
+test("scan member groups finds inbox invite links and copy/share stay consented", async () => {
+  const { app } = setupApp();
+  const { sessionId, ids } = seedGroups(2);
+  getDb().prepare("UPDATE groups SET name = 'گروه منبع' WHERE id = ?").run(ids[0]);
+  getDb()
+    .prepare(
+      `INSERT INTO inbox_messages (session_id, chat_id, chat_name, chat_type, direction, body, unread)
+       VALUES (?, '12036301@g.us', 'گروه منبع', 'group', 'in', ?, 0)`
+    )
+    .run(sessionId, "لینک عمومی: https://chat.whatsapp.com/JoinableGroupLink99");
+  const sent = [];
+  const wa = mockWhatsApp();
+  wa.sendChat = async ({ chatId, text }) => {
+    sent.push({ chatId, text });
+    return { ok: true };
+  };
+  const { agent, csrf } = await login(app);
+  const scan = await agent.post("/api/discovery/scan").set("X-CSRF-Token", csrf).send({});
+  assert.equal(scan.status, 200);
+  assert.equal(scan.body.groupsScanned, 2);
+  assert.equal(scan.body.newLinks, 1);
+  assert.equal(scan.body.validJoinable, 1);
+  const suggested = await agent.get("/api/discovery?suggested=1");
+  assert.equal(suggested.body.groups.length, 1);
+  assert.equal(suggested.body.groups[0].found_by, "member_group_scan");
+  assert.match(suggested.body.groups[0].normalized_url, /JoinableGroupLink99/);
+  const copyAll = await agent.post("/api/discovery/copy-text").set("X-CSRF-Token", csrf).send({});
+  assert.equal(copyAll.status, 200);
+  assert.match(copyAll.body.text, /JoinableGroupLink99/);
+  const emptyCopy = await agent.post("/api/discovery/copy-text").set("X-CSRF-Token", csrf).send({ ids: [] });
+  assert.equal(emptyCopy.status, 400);
+  const id = suggested.body.groups[0].id;
+  const noConfirm = await agent.post("/api/discovery/share").set("X-CSRF-Token", csrf).send({
+    ids: [id],
+    to: "09121234567",
+    confirm: false,
+    confirmCount: 1
+  });
+  assert.equal(noConfirm.status, 400);
+  assert.equal(noConfirm.body.code, "confirm_required");
+  const mismatch = await agent.post("/api/discovery/share").set("X-CSRF-Token", csrf).send({
+    ids: [id],
+    to: "09121234567",
+    confirm: true,
+    confirmCount: 99
+  });
+  assert.equal(mismatch.status, 400);
+  assert.equal(mismatch.body.code, "confirm_mismatch");
+  const ok = await agent.post("/api/discovery/share").set("X-CSRF-Token", csrf).send({
+    ids: [id],
+    to: "09121234567",
+    confirm: true,
+    confirmCount: 1
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].chatId, "989121234567@s.whatsapp.net");
+  assert.match(sent[0].text, /JoinableGroupLink99/);
+  assert.equal(typeof wa.groupAcceptInvite, "undefined");
 });
 
 test("left groups cannot be used for admin detection", async () => {

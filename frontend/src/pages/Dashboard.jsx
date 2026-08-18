@@ -74,6 +74,7 @@ export function Dashboard() {
         </Link>
         <Link to="/discovered-groups" className="card">
           <h3>گروه‌های کشف‌شده</h3>
+          <p className="muted">اسکن لینک‌های قابل عضویت در گروه‌های فعلی و ارسال یکجا به یک مخاطب</p>
           <div className="row">
             <span className="badge">Links Found {s.discovery?.linksFound ?? 0}</span>
             <span className="badge">New Groups {s.discovery?.newGroups ?? 0}</span>

@@ -16,7 +16,8 @@ discoveryRouter.get(
       groups: groupLinkMonitor.list({
         q: req.query.q || "",
         status: req.query.status || "",
-        joinStatus: req.query.join || ""
+        joinStatus: req.query.join || "",
+        suggested: req.query.suggested === "1" || req.query.suggested === "true"
       }),
       analytics: groupLinkMonitor.analytics()
     });
@@ -34,6 +35,53 @@ discoveryRouter.post(
   "/refresh-joined",
   asyncHandler(async (req, res) => {
     res.json({ groups: groupLinkMonitor.refreshJoined() });
+  })
+);
+
+discoveryRouter.post(
+  "/scan",
+  asyncHandler(async (req, res) => {
+    const wa = waManager.primary();
+    if (wa.isConnected()) {
+      try {
+        await wa.syncGroups();
+      } catch {
+        /* scan stored membership anyway */
+      }
+    }
+    const result = await groupLinkMonitor.scanMemberGroups(wa);
+    res.json(result);
+  })
+);
+
+discoveryRouter.post(
+  "/copy-text",
+  asyncHandler(async (req, res) => {
+    const parsed = z.object({ ids: z.array(z.coerce.number()).optional() }).safeParse(req.body || {});
+    if (!parsed.success) throw new HttpError(400, "داده نامعتبر");
+    res.json(groupLinkMonitor.exportText(parsed.data.ids));
+  })
+);
+
+discoveryRouter.post(
+  "/share",
+  asyncHandler(async (req, res) => {
+    const parsed = z
+      .object({
+        ids: z.array(z.coerce.number()).min(1),
+        to: z.string().min(8).max(20),
+        confirm: z.boolean().optional(),
+        confirmCount: z.coerce.number().optional()
+      })
+      .safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "داده نامعتبر");
+    if (!waManager.primary().isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
+    const result = await groupLinkMonitor.shareToContact({
+      ...parsed.data,
+      wa: waManager.primary(),
+      userId: req.user.id
+    });
+    res.json(result);
   })
 );
 
