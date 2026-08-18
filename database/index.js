@@ -46,6 +46,9 @@ function migrateSchema(database) {
   addColumn(database, "groups", "found_by", "TEXT");
   addColumn(database, "groups", "found_at", "TEXT");
   addColumn(database, "groups", "source_group_name", "TEXT");
+  database.exec(
+    "CREATE INDEX IF NOT EXISTS idx_groups_permission ON groups(advertising_permission, membership_status)"
+  );
 }
 
 function seedAdmin() {

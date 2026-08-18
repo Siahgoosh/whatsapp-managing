@@ -428,5 +428,4 @@ CREATE INDEX IF NOT EXISTS idx_group_admins_group ON group_admins(group_id, acti
 CREATE INDEX IF NOT EXISTS idx_group_admins_jid ON group_admins(session_id, wa_jid);
 CREATE INDEX IF NOT EXISTS idx_admin_history_admin ON admin_contact_history(admin_id, date);
 CREATE INDEX IF NOT EXISTS idx_discovered_links_status ON discovered_group_links(validation_status, join_status);
-CREATE INDEX IF NOT EXISTS idx_groups_permission ON groups(advertising_permission, membership_status);
 `;
