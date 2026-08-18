@@ -1,7 +1,8 @@
 import { config } from "../../config/index.js";
 import { assertPublicHttpUrl } from "./ssrf.js";
 
-const UA = "WhatsAppCampaignManager/1.0 (+public-group-finder; respects-robots)";
+const UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
 
 export async function safeFetch(url, { method = "GET", maxRedirects = 3, timeoutMs } = {}) {
   const timeout = timeoutMs || config.finder.requestTimeoutMs;

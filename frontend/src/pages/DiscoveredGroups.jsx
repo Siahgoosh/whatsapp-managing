@@ -16,7 +16,7 @@ export function DiscoveredGroups() {
   const [rows, setRows] = useState([]);
   const [analytics, setAnalytics] = useState({});
   const [q, setQ] = useState("");
-  const [onlyJoinable, setOnlyJoinable] = useState(true);
+  const [onlyJoinable, setOnlyJoinable] = useState(false);
   const [review, setReview] = useState(null);
   const [picked, setPicked] = useState(new Set());
   const [scanning, setScanning] = useState(false);
@@ -60,7 +60,7 @@ export function DiscoveredGroups() {
     try {
       const r = await api.discoveryScan();
       pushToast(`اسکن شد: ${r.groupsScanned} گروه — لینک جدید ${r.newLinks} — قابل عضویت ${r.validJoinable}`);
-      setOnlyJoinable(true);
+      setOnlyJoinable(false);
       await load();
     } catch (e) {
       pushToast(e.message);
@@ -82,7 +82,10 @@ export function DiscoveredGroups() {
 
   function shareableIds() {
     const source = selectedRows.length ? selectedRows : rows;
-    return source.filter((r) => r.validation_status === "valid").map((r) => r.id).slice(0, 40);
+    return source
+      .filter((r) => r.openable !== false && r.validation_status !== "invalid")
+      .map((r) => r.id)
+      .slice(0, 40);
   }
 
   async function copyLinks(ids) {
@@ -118,7 +121,7 @@ export function DiscoveredGroups() {
           <p className="muted">
             همهٔ گروه‌هایی که عضو هستید برای لینک عمومی قابل عضویت اسکن می‌شوند. با «عضو شو» لینک در واتساپ باز می‌شود و Join را خودتان تأیید می‌کنید. همان لینک‌ها را می‌توانید کپی کنید یا یکجا برای یک نفر بفرستید.
           </p>
-          <p className="muted" style={{ fontSize: 12 }}>نسخه اسکن گروهی v1</p>
+          <p className="muted" style={{ fontSize: 12 }}>نسخه اسکن گروهی v2 — لینک‌های پیدا شده حتی اگر واتساپ صفحه را به ربات ندهد نشان داده می‌شوند</p>
         </div>
         <div className="row">
           <button className="btn" disabled={scanning} onClick={scanNow}>
@@ -149,7 +152,7 @@ export function DiscoveredGroups() {
           <button className="btn secondary" onClick={load}>جستجو</button>
           <label className="row">
             <input type="checkbox" checked={onlyJoinable} onChange={(e) => setOnlyJoinable(e.target.checked)} />
-            فقط لینک معتبر و هنوز عضو نیستم
+            فقط هنوز عضو نیستم (لینک منقضی‌شده مخفی شود)
           </label>
           <button className="btn secondary" onClick={() => setPicked(new Set(rows.map((r) => r.id)))}>انتخاب همه</button>
           <button className="btn secondary" onClick={() => setPicked(new Set())}>هیچکدام</button>
@@ -185,14 +188,20 @@ export function DiscoveredGroups() {
                 <td>{g.found_at}</td>
                 <td>
                   {g.validation_status === "valid" ? <span className="badge ok">🟢 Valid / قابل عضویت</span> : null}
+                  {g.validation_status === "unavailable" || g.validation_status === "unknown" ? (
+                    <span className="badge ok">🟢 قابل باز شدن در واتساپ</span>
+                  ) : null}
                   {g.validation_status === "invalid" ? <span className="badge danger">🔴 Invalid</span> : null}
-                  {g.validation_status !== "valid" && g.validation_status !== "invalid" ? (
+                  {g.validation_status !== "valid" &&
+                  g.validation_status !== "invalid" &&
+                  g.validation_status !== "unavailable" &&
+                  g.validation_status !== "unknown" ? (
                     <span className="badge">{statusFa(g.validation_status)}</span>
                   ) : null}
                 </td>
                 <td>{JOIN_LABEL[g.join_status] || JOIN_LABEL.unknown}</td>
                 <td className="row">
-                  {g.validation_status === "valid" && g.join_status !== "joined" && (
+                  {g.validation_status !== "invalid" && g.join_status !== "joined" && (
                     <button className="btn" onClick={() => openJoin(g)}>عضو شو</button>
                   )}
                   <a className="btn secondary" href={g.normalized_url} target="_blank" rel="noreferrer">باز کردن لینک</a>
@@ -215,7 +224,15 @@ export function DiscoveredGroups() {
             ))}
           </tbody>
         </table>
-        {!rows.length && (
+        {!rows.length && analytics.linksFound > 0 && (
+          <div className="card" style={{ marginTop: 16, textAlign: "center" }}>
+            <p>
+              {analytics.linksFound} لینک پیدا شده ولی با فیلتر فعلی دیده نمی‌شود.
+            </p>
+            <button className="btn" onClick={() => setOnlyJoinable(false)}>نمایش همه لینک‌ها</button>
+          </div>
+        )}
+        {!rows.length && !analytics.linksFound && (
           <div className="card" style={{ marginTop: 16, textAlign: "center" }}>
             <p>هنوز لینکی پیدا نشده. همهٔ گروه‌های عضو را همین الان اسکن کنید.</p>
             <button className="btn" disabled={scanning} onClick={scanNow}>

@@ -6,7 +6,7 @@ mkdir -p logs
 PIDFILE="$ROOT/logs/app.pid"
 
 ui_is_current() {
-  [[ -f "$ROOT/frontend/dist/ui-version.txt" ]] && grep -qx "scan-share-v1" "$ROOT/frontend/dist/ui-version.txt"
+  [[ -f "$ROOT/frontend/dist/ui-version.txt" ]] && grep -q "scan-share-v" "$ROOT/frontend/dist/ui-version.txt"
 }
 
 if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
@@ -38,7 +38,7 @@ if [[ ! -f "$ROOT/frontend/dist/index.html" ]]; then
   exit 1
 fi
 if ! ui_is_current; then
-  echo "frontend/dist is stale (need scan-share-v1). Run ./scripts/build-frontend.sh" >&2
+  echo "frontend/dist is stale (need scan-share-v*). Run ./scripts/build-frontend.sh" >&2
   exit 1
 fi
 

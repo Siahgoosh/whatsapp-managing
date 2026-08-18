@@ -38,6 +38,21 @@ export function parsePublicInviteMeta(html = "") {
   };
 }
 
+export function inviteLooksExpired(body = "") {
+  const t = String(body).toLowerCase();
+  return (
+    t.includes("invite not found") ||
+    t.includes("this invite link is invalid") ||
+    t.includes("couldn't find this invite") ||
+    t.includes("this invite was revoked") ||
+    t.includes("this link has expired")
+  );
+}
+
+export function isOpenableInviteStatus(status) {
+  return status === "valid" || status === "unavailable" || status === "unknown";
+}
+
 export async function validateInvite(url) {
   const normalized = normalizeInviteUrl(url);
   if (!normalized) return { status: "invalid", httpStatus: null, meta: null };
@@ -47,10 +62,19 @@ export async function validateInvite(url) {
     if (!isWhatsAppInviteHost(res.url) && !isWhatsAppInviteHost(normalized)) {
       return { status: "invalid", httpStatus: res.status, meta: null };
     }
-    if (res.status >= 400 && res.status < 500) return { status: "invalid", httpStatus: res.status, meta: null };
-    if (res.status >= 500) return { status: "unavailable", httpStatus: res.status, meta: null };
-    if (looksLikeCaptchaOrLogin(res.body, res.status)) {
+    if (res.status === 404 || inviteLooksExpired(res.body)) {
+      return { status: "invalid", httpStatus: res.status, meta: null };
+    }
+    // WhatsApp often returns 401/403 to datacenter crawlers. The invite can still
+    // open in the WhatsApp app, so do not hide it as invalid.
+    if (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500) {
+      return { status: "unavailable", httpStatus: res.status, meta: parsePublicInviteMeta(res.body || "") };
+    }
+    if (res.status >= 400 && res.status < 500) {
       return { status: "unavailable", httpStatus: res.status, meta: null };
+    }
+    if (looksLikeCaptchaOrLogin(res.body, res.status)) {
+      return { status: "unavailable", httpStatus: res.status, meta: parsePublicInviteMeta(res.body) };
     }
     const meta = parsePublicInviteMeta(res.body);
     return { status: "valid", httpStatus: res.status, meta };

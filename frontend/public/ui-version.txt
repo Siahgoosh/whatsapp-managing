@@ -1,1 +1,1 @@
-scan-share-v1
+scan-share-v2

@@ -3,7 +3,8 @@ import { config } from "../../config/index.js";
 import { HttpError } from "../../backend/src/utils/errors.js";
 import { inferCityFromName } from "../finder/cities.js";
 import { extractInviteLinks } from "../finder/links.js";
-import { validateInvite } from "../finder/validate.js";
+import { isOpenableInviteStatus, validateInvite } from "../finder/validate.js";
+import { normalizeInviteUrl } from "../finder/links.js";
 import { notificationService } from "../notifications/NotificationService.js";
 import { nowSql } from "../../backend/src/utils/persian.js";
 import { formatShareLinks, phoneToWhatsAppJid } from "./phone.js";
@@ -130,7 +131,20 @@ export class GroupLinkMonitor {
     return { ...row, duplicate: false, discovery: "new_group_discovered" };
   }
 
+  repairOpenable() {
+    getDb()
+      .prepare(
+        `UPDATE discovered_group_links
+         SET validation_status = 'unavailable', updated_at = datetime('now')
+         WHERE validation_status = 'invalid'
+           AND normalized_url LIKE 'https://chat.whatsapp.com/%'
+           AND IFNULL(http_status, 0) != 404`
+      )
+      .run();
+  }
+
   list({ q = "", status = "", joinStatus = "", suggested = false } = {}) {
+    this.repairOpenable();
     let sql = "SELECT * FROM discovered_group_links WHERE 1=1";
     const params = [];
     if (q) {
@@ -146,7 +160,7 @@ export class GroupLinkMonitor {
       params.push(joinStatus);
     }
     if (suggested) {
-      sql += " AND validation_status = 'valid' AND join_status != 'joined'";
+      sql += " AND validation_status IN ('valid', 'unavailable', 'unknown') AND join_status != 'joined'";
     }
     sql += " ORDER BY id DESC";
     return getDb().prepare(sql).all(...params).map((row) => this.decorate(row));
@@ -160,6 +174,7 @@ export class GroupLinkMonitor {
       ...row,
       duplicate: false,
       discovery: "stored",
+      openable: Boolean(normalizeInviteUrl(row.normalized_url)) && isOpenableInviteStatus(row.validation_status),
       queueStatus: queue?.status || "pending_review",
       openedAt: queue?.opened_at || null
     };
@@ -375,10 +390,13 @@ export class GroupLinkMonitor {
     const placeholders = unique.map(() => "?").join(",");
     const rows = getDb()
       .prepare(
-        `SELECT * FROM discovered_group_links WHERE id IN (${placeholders}) AND validation_status = 'valid'`
+        `SELECT * FROM discovered_group_links
+         WHERE id IN (${placeholders})
+           AND validation_status IN ('valid', 'unavailable', 'unknown')
+           AND normalized_url LIKE 'https://chat.whatsapp.com/%'`
       )
       .all(...unique);
-    if (!rows.length) throw new HttpError(400, "لینک معتبر و قابل عضویت انتخاب نشده است");
+    if (!rows.length) throw new HttpError(400, "لینک قابل عضویت انتخاب نشده است");
     return rows;
   }
 
@@ -409,6 +427,7 @@ export class GroupLinkMonitor {
   }
 
   analytics() {
+    this.repairOpenable();
     const db = getDb();
     const n = (sql) => db.prepare(sql).get().c;
     return {
@@ -418,7 +437,11 @@ export class GroupLinkMonitor {
       pendingReview: n(
         "SELECT COUNT(*) AS c FROM group_join_queue WHERE status IN ('pending_review', 'opened')"
       ),
-      valid: n("SELECT COUNT(*) AS c FROM discovered_group_links WHERE validation_status = 'valid'"),
+      valid: n(
+        `SELECT COUNT(*) AS c FROM discovered_group_links
+         WHERE validation_status IN ('valid', 'unavailable', 'unknown')
+           AND join_status != 'joined'`
+      ),
       invalid: n("SELECT COUNT(*) AS c FROM discovered_group_links WHERE validation_status = 'invalid'"),
       approvedGroups: n(
         "SELECT COUNT(*) AS c FROM groups WHERE membership_status = 'member' AND advertising_permission = 'approved'"

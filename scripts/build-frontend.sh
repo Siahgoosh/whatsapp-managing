@@ -16,8 +16,8 @@ if [[ ! -f frontend/dist/index.html ]]; then
   exit 1
 fi
 
-if ! grep -q "scan-share-v1" frontend/dist/ui-version.txt 2>/dev/null; then
-  echo "Frontend build failed: ui-version.txt is not scan-share-v1" >&2
+if ! grep -q "scan-share-v" frontend/dist/ui-version.txt 2>/dev/null; then
+  echo "Frontend build failed: ui-version.txt is missing scan-share stamp" >&2
   exit 1
 fi
 

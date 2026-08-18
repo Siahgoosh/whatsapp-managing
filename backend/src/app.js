@@ -64,7 +64,7 @@ export function createApp() {
       features: ["outreach", "discovery", "finder", "scan-share"],
       frontendBuilt: fs.existsSync(distHtml),
       uiVersion,
-      uiScanShare: uiVersion === "scan-share-v1"
+      uiScanShare: String(uiVersion || "").startsWith("scan-share-v"),
     });
   });
 

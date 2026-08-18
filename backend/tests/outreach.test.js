@@ -334,6 +334,41 @@ test("scan member groups finds inbox invite links and copy/share stay consented"
   assert.equal(typeof wa.groupAcceptInvite, "undefined");
 });
 
+test("HTTP 403 invite links are still listed as joinable", async () => {
+  const { app } = setupApp();
+  const { sessionId, ids } = seedGroups(1);
+  const { agent, csrf } = await login(app);
+  getDb()
+    .prepare(
+      `INSERT INTO discovered_group_links
+         (session_id, invite_url, normalized_url, source_group_id, source_group_name,
+          found_at, found_by, validation_status, http_status, group_name, join_status, city)
+       VALUES (?, ?, ?, ?, 'گروه منبع', datetime('now'), 'member_group_scan', 'invalid', 403, 'گروه عمومی', 'not_joined', 'سایر')`
+    )
+    .run(
+      sessionId,
+      "https://chat.whatsapp.com/BlockedByBotAAAA",
+      "https://chat.whatsapp.com/BlockedByBotAAAA",
+      ids[0]
+    );
+  const hidden = await agent.get("/api/discovery?suggested=1");
+  assert.equal(hidden.body.groups.length, 1);
+  assert.equal(hidden.body.groups[0].validation_status, "unavailable");
+  assert.equal(hidden.body.groups[0].openable, true);
+  assert.equal(hidden.body.analytics.valid, 1);
+  assert.equal(hidden.body.analytics.linksFound, 1);
+  const all = await agent.get("/api/discovery");
+  assert.equal(all.body.groups.length, 1);
+  const copy = await agent.post("/api/discovery/copy-text").set("X-CSRF-Token", csrf).send({
+    ids: [all.body.groups[0].id]
+  });
+  assert.equal(copy.status, 200);
+  assert.match(copy.body.text, /BlockedByBotAAAA/);
+  const open = await agent.post(`/api/discovery/${all.body.groups[0].id}/open`).set("X-CSRF-Token", csrf).send({});
+  assert.equal(open.status, 200);
+  assert.match(open.body.openUrl, /BlockedByBotAAAA/);
+});
+
 test("left groups cannot be used for admin detection", async () => {
   const { app } = setupApp();
   const { ids } = seedGroups(1);
