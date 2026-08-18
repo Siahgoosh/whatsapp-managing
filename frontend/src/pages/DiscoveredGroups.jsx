@@ -118,6 +118,7 @@ export function DiscoveredGroups() {
           <p className="muted">
             همهٔ گروه‌هایی که عضو هستید برای لینک عمومی قابل عضویت اسکن می‌شوند. با «عضو شو» لینک در واتساپ باز می‌شود و Join را خودتان تأیید می‌کنید. همان لینک‌ها را می‌توانید کپی کنید یا یکجا برای یک نفر بفرستید.
           </p>
+          <p className="muted" style={{ fontSize: 12 }}>نسخه اسکن گروهی v1</p>
         </div>
         <div className="row">
           <button className="btn" disabled={scanning} onClick={scanNow}>
@@ -214,7 +215,14 @@ export function DiscoveredGroups() {
             ))}
           </tbody>
         </table>
-        {!rows.length && <p className="muted">هنوز لینکی نیست. «اسکن همه گروه‌ها همین الان» را بزنید.</p>}
+        {!rows.length && (
+          <div className="card" style={{ marginTop: 16, textAlign: "center" }}>
+            <p>هنوز لینکی پیدا نشده. همهٔ گروه‌های عضو را همین الان اسکن کنید.</p>
+            <button className="btn" disabled={scanning} onClick={scanNow}>
+              {scanning ? "در حال اسکن..." : "اسکن همه گروه‌ها همین الان"}
+            </button>
+          </div>
+        )}
       </div>
 
       {review && (

@@ -5,18 +5,40 @@ cd "$ROOT"
 mkdir -p logs
 PIDFILE="$ROOT/logs/app.pid"
 
+ui_is_current() {
+  [[ -f "$ROOT/frontend/dist/ui-version.txt" ]] && grep -qx "scan-share-v1" "$ROOT/frontend/dist/ui-version.txt"
+}
+
 if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  echo "Already running (pid $(cat "$PIDFILE"))"
-  echo "Use ./scripts/restart.sh to rebuild the UI and restart."
-  exit 0
+  if ui_is_current; then
+    echo "Already running (pid $(cat "$PIDFILE"))"
+    echo "If the scan button is missing, hard-refresh the browser (Ctrl+Shift+R)."
+    curl -s "http://127.0.0.1:${PORT:-9454}/health" || true
+    echo
+    exit 0
+  fi
+  echo "Running process has an old UI. Stopping so the scan/share page can be served."
+  "$ROOT/scripts/stop.sh" || true
 fi
 
-if [[ "${SKIP_FRONTEND_BUILD:-}" != "1" ]]; then
-  "$ROOT/scripts/build-frontend.sh"
+if [[ "${SKIP_FRONTEND_BUILD:-}" != "1" ]] || ! ui_is_current; then
+  if [[ -d "$ROOT/frontend/src" ]]; then
+    "$ROOT/scripts/build-frontend.sh" || {
+      if ui_is_current; then
+        echo "Build failed, but committed dist already has the scan UI. Continuing."
+      else
+        exit 1
+      fi
+    }
+  fi
 fi
 
 if [[ ! -f "$ROOT/frontend/dist/index.html" ]]; then
   echo "frontend/dist is missing. Run ./scripts/install.sh" >&2
+  exit 1
+fi
+if ! ui_is_current; then
+  echo "frontend/dist is stale (need scan-share-v1). Run ./scripts/build-frontend.sh" >&2
   exit 1
 fi
 

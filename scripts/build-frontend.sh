@@ -8,7 +8,7 @@ if [[ ! -d frontend/node_modules ]]; then
   npm --prefix frontend install
 fi
 
-echo "==> Building frontend (dist is not in git — required after every pull)"
+echo "==> Building frontend"
 npm --prefix frontend run build
 
 if [[ ! -f frontend/dist/index.html ]]; then
@@ -16,8 +16,14 @@ if [[ ! -f frontend/dist/index.html ]]; then
   exit 1
 fi
 
-if ! grep -q "admin-outreach" frontend/dist/assets/*.js frontend/dist/index.html 2>/dev/null; then
-  echo "Warning: built UI does not contain Admin Outreach routes. Check that source was pulled." >&2
+if ! grep -q "scan-share-v1" frontend/dist/ui-version.txt 2>/dev/null; then
+  echo "Frontend build failed: ui-version.txt is not scan-share-v1" >&2
+  exit 1
+fi
+
+if ! grep -q "اسکن همه گروه‌ها همین الان" frontend/dist/assets/*.js 2>/dev/null; then
+  echo "Frontend build failed: scan button is missing from the bundle" >&2
+  exit 1
 fi
 
 echo "==> Frontend build ready"

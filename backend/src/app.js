@@ -47,14 +47,24 @@ export function createApp() {
 
   app.get("/health", (req, res) => {
     const wa = waManager.primary().publicStatus();
+    const distHtml = path.join(config.paths.frontendDist, "index.html");
+    const uiVersionFile = path.join(config.paths.frontendDist, "ui-version.txt");
+    let uiVersion = null;
+    try {
+      if (fs.existsSync(uiVersionFile)) uiVersion = fs.readFileSync(uiVersionFile, "utf8").trim();
+    } catch {
+      uiVersion = null;
+    }
     res.json({
       ok: true,
       port: config.port,
       uptime: process.uptime(),
       database: Boolean(getDb()),
       whatsapp: wa.status,
-      features: ["outreach", "discovery", "finder"],
-      frontendBuilt: fs.existsSync(path.join(config.paths.frontendDist, "index.html"))
+      features: ["outreach", "discovery", "finder", "scan-share"],
+      frontendBuilt: fs.existsSync(distHtml),
+      uiVersion,
+      uiScanShare: uiVersion === "scan-share-v1"
     });
   });
 
@@ -118,7 +128,8 @@ export function createApp() {
       express.static(config.paths.frontendDist, {
         index: false,
         setHeaders(res, filePath) {
-          if (filePath.endsWith("index.html")) {
+          const base = path.basename(filePath);
+          if (base === "index.html" || base === "ui-version.txt") {
             res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
           } else {
             res.setHeader("Cache-Control", "public, max-age=31536000, immutable");

@@ -251,11 +251,13 @@ tar xzf wcm-backup-YYYY-MM-DD.tar.gz
 ## به‌روزرسانی
 
 ```bash
-./scripts/stop.sh
-git pull
-./scripts/install.sh
-./scripts/start.sh
+cd /opt/whatsapp-managing
+./scripts/update.sh
 ```
+
+بعد در مرورگر Ctrl+Shift+R. دکمهٔ **اسکن همه گروه‌ها همین الان** باید در «گروه‌های کشف‌شده» دیده شود. `curl -s http://127.0.0.1:9454/health` باید `"uiScanShare":true` باشد.
+
+اگر `git pull` به‌خاطر `frontend/dist` خطا داد، همان اسکریپت پوشهٔ dist محلی را حذف می‌کند تا UI داخل گیت جایگزین شود.
 
 ---
 
@@ -264,6 +266,7 @@ git pull
 | مشکل | بررسی |
 | --- | --- |
 | صفحه باز نمی‌شود | `curl /health` ، فایروال، `logs/stdout.log` |
+| دکمه اسکن گروه نیست | `./scripts/update.sh` سپس Ctrl+Shift+R — `"uiScanShare":true` |
 | QR نمی‌آید | دکمهٔ شروع اتصال، وضعیت Connecting / QR Required |
 | بعد از Restart دوباره QR می‌خواهد | وجود داشتن `sessions/default` و permission پوشه |
 | کمپین Pause شد | قطع واتساپ، خطای محدودیت، یا تعداد خطاهای متوالی |
