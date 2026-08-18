@@ -1,0 +1,17 @@
+[Unit]
+Description=WhatsApp Campaign Manager
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/whatsapp-managing
+EnvironmentFile=-/opt/whatsapp-managing/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node backend/src/index.js
+Restart=always
+RestartSec=4
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

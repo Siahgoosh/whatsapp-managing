@@ -22,7 +22,8 @@ elif command -v lsof >/dev/null 2>&1; then
 fi
 
 if command -v docker >/dev/null 2>&1; then
-  docker compose -f "$ROOT/docker-compose.yml" down >/dev/null 2>&1 || true
+  docker rm -f whatsapp-campaign-manager >/dev/null 2>&1 || true
+  docker compose -f "$ROOT/docker-compose.yml" down --remove-orphans >/dev/null 2>&1 || true
 fi
 
 echo "Port ${PORT} is free"

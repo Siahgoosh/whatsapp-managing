@@ -22,4 +22,28 @@ fi
 
 nohup node backend/src/index.js >> logs/stdout.log 2>&1 &
 echo $! > "$PIDFILE"
-echo "Started on port ${PORT:-9454} (pid $(cat "$PIDFILE"))"
+PID="$(cat "$PIDFILE")"
+echo "Started on port ${PORT:-9454} (pid $PID)"
+
+ok=0
+for _ in $(seq 1 20); do
+  if curl -sf --max-time 1 "http://127.0.0.1:${PORT:-9454}/health" >/dev/null 2>&1; then
+    ok=1
+    break
+  fi
+  if ! kill -0 "$PID" 2>/dev/null; then
+    echo "Process exited. Last log:" >&2
+    tail -n 40 logs/stdout.log >&2 || true
+    exit 1
+  fi
+  sleep 0.4
+done
+if [[ "$ok" -ne 1 ]]; then
+  echo "Started but http://127.0.0.1:${PORT:-9454}/health did not respond. Last log:" >&2
+  tail -n 40 logs/stdout.log >&2 || true
+  echo "Run ./scripts/diagnose.sh" >&2
+  exit 1
+fi
+curl -s "http://127.0.0.1:${PORT:-9454}/health"
+echo
+echo "Local health OK. If the public URL still fails, open firewall: ufw allow 9454/tcp"

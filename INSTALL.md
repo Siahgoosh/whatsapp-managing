@@ -136,10 +136,27 @@ git pull origin cursor/whatsapp-campaign-manager-b0db
 docker compose up -d --build
 ```
 
-بررسی سلامت:
+بررسی سلامت **روی خود سرور**:
 
 ```bash
 curl http://127.0.0.1:9454/health
+./scripts/diagnose.sh
+```
+
+اگر مرورگر صفحه را باز نمی‌کند ولی localhost روی سرور سالم است، فایروال را باز کنید:
+
+```bash
+sudo ufw allow 9454/tcp
+sudo ufw reload
+```
+
+اگر `curl` به IP عمومی `Connection reset` می‌دهد، معمولاً Docker ناقص روی همان پورت مانده. فقط Node را اجرا کنید:
+
+```bash
+docker rm -f whatsapp-campaign-manager
+docker compose down
+./scripts/stop.sh
+./scripts/start.sh
 ```
 
 ---

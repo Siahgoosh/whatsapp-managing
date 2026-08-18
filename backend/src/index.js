@@ -101,6 +101,21 @@ cron.schedule("20 * * * *", () => {
   outreachService.markFollowUps();
 });
 
+process.on("uncaughtException", (err) => {
+  logger.error({ err: err.message, stack: err.stack }, "uncaughtException");
+});
+process.on("unhandledRejection", (err) => {
+  logger.error({ err: err?.message || String(err) }, "unhandledRejection");
+});
+
+server.on("error", (err) => {
+  logger.error({ err: err.message }, "http server error");
+  if (err.code === "EADDRINUSE") {
+    logger.error(`Port ${config.port} is already in use. Stop the other process or Docker container.`);
+    process.exit(1);
+  }
+});
+
 server.listen(config.port, "0.0.0.0", () => {
   systemLog("server_start", `Listening on ${config.port}`);
   logger.info(`WhatsApp Campaign Manager on port ${config.port}`);
