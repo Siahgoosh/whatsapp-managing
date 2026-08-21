@@ -7,7 +7,11 @@ import { isOpenableInviteStatus, validateInvite } from "../finder/validate.js";
 import { normalizeInviteUrl } from "../finder/links.js";
 import { notificationService } from "../notifications/NotificationService.js";
 import { nowSql } from "../../backend/src/utils/persian.js";
-import { formatShareLinks, phoneToWhatsAppJid } from "./phone.js";
+import { formatShareLinks, phoneToWhatsAppJid, chunkShareRows } from "./phone.js";
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function normName(s) {
   return String(s || "")
@@ -390,7 +394,9 @@ export class GroupLinkMonitor {
   rowsForShare(ids) {
     const unique = [...new Set((ids || []).map(Number).filter(Boolean))];
     if (!unique.length) throw new HttpError(400, "لینکی انتخاب نشده است");
-    if (unique.length > 40) throw new HttpError(400, "حداکثر ۴۰ لینک در هر ارسال");
+    if (unique.length > config.maxShareLinks) {
+      throw new HttpError(400, `حداکثر ${config.maxShareLinks} لینک در هر ارسال`);
+    }
     const placeholders = unique.map(() => "?").join(",");
     const rows = getDb()
       .prepare(
@@ -419,15 +425,21 @@ export class GroupLinkMonitor {
       throw new HttpError(400, "تعداد تأیید با لینک‌های انتخاب‌شده یکی نیست", "confirm_mismatch");
     }
     if (!wa?.sendChat) throw new HttpError(409, "واتساپ متصل نیست");
-    const text = formatShareLinks(rows);
-    await wa.sendChat({ chatId: jid, text });
-    getDb()
-      .prepare(
-        `INSERT INTO inbox_messages (session_id, chat_id, chat_name, chat_type, direction, body, unread)
-         VALUES (?, ?, ?, 'contact', 'out', ?, 0)`
-      )
-      .run(this.session(wa?.sessionKey).id, jid, to, text.slice(0, 8000));
-    return { ok: true, chatId: jid, count: rows.length, text };
+    const chunks = chunkShareRows(rows, config.shareMessageMaxChars);
+    const sessionId = this.session(wa?.sessionKey).id;
+    const delayMs = config.isTest ? 0 : config.minDelaySeconds * 1000;
+    for (let i = 0; i < chunks.length; i++) {
+      if (i > 0 && delayMs) await sleep(delayMs);
+      await wa.sendChat({ chatId: jid, text: chunks[i].text });
+      getDb()
+        .prepare(
+          `INSERT INTO inbox_messages (session_id, chat_id, chat_name, chat_type, direction, body, unread)
+           VALUES (?, ?, ?, 'contact', 'out', ?, 0)`
+        )
+        .run(sessionId, jid, to, chunks[i].text.slice(0, 8000));
+    }
+    const text = chunks.map((c) => c.text).join("\n\n");
+    return { ok: true, chatId: jid, count: rows.length, messages: chunks.length, text };
   }
 
   analytics() {

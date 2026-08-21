@@ -7,7 +7,7 @@ import { inferCityFromName } from "../../services/finder/cities.js";
 import { outreachService } from "../../services/outreach/OutreachService.js";
 import { groupLinkMonitor } from "../../services/outreach/GroupLinkMonitor.js";
 import { extractInviteLinks } from "../../services/finder/links.js";
-import { formatShareLinks, phoneToWhatsAppJid } from "../../services/outreach/phone.js";
+import { formatShareLinks, phoneToWhatsAppJid, chunkShareRows } from "../../services/outreach/phone.js";
 
 function mockAdmins(wa, extraRegularIgnored = true) {
   wa.fetchGroupAdmins = async (waId) => {
@@ -273,6 +273,25 @@ test("phone helper normalizes Iranian numbers for a single WhatsApp contact", ()
   assert.match(text, /chat\.whatsapp\.com\/AbCdEfGhIjKlMnOp/);
 });
 
+test("share chunks keep all 57 links instead of capping at 40", () => {
+  const rows = Array.from({ length: 57 }, (_, i) => ({
+    group_name: `گروه ${i + 1}`,
+    normalized_url: `https://chat.whatsapp.com/Link${String(i + 1).padStart(3, "0")}ABCDEF`
+  }));
+  const one = formatShareLinks(rows);
+  assert.match(one, /گروه 57/);
+  assert.match(one, /Link057ABCDEF/);
+  const chunks = chunkShareRows(rows, 800);
+  assert.ok(chunks.length >= 2);
+  const combined = chunks.map((c) => c.text).join("\n");
+  assert.match(combined, /گروه 1/);
+  assert.match(combined, /گروه 57/);
+  assert.equal(
+    chunks.reduce((n, c) => n + c.rows.length, 0),
+    57
+  );
+});
+
 test("scan member groups finds inbox invite links and copy/share stay consented", async () => {
   const { app } = setupApp();
   const { sessionId, ids } = seedGroups(2);
@@ -332,6 +351,46 @@ test("scan member groups finds inbox invite links and copy/share stay consented"
   assert.equal(sent[0].chatId, "989121234567@s.whatsapp.net");
   assert.match(sent[0].text, /JoinableGroupLink99/);
   assert.equal(typeof wa.groupAcceptInvite, "undefined");
+});
+
+test("share sends all 57 links to one contact instead of stopping at 40", async () => {
+  const { app } = setupApp();
+  const { sessionId, ids } = seedGroups(1);
+  const insert = getDb().prepare(
+    `INSERT INTO discovered_group_links
+       (session_id, invite_url, normalized_url, source_group_id, source_group_name,
+        found_at, found_by, validation_status, http_status, group_name, join_status, city)
+     VALUES (?, ?, ?, ?, 'گروه منبع', datetime('now'), 'member_group_scan', 'valid', 200, ?, 'not_joined', 'سایر')`
+  );
+  const linkIds = [];
+  for (let i = 1; i <= 57; i++) {
+    const url = `https://chat.whatsapp.com/ShareAll${String(i).padStart(3, "0")}XXXXXX`;
+    const info = insert.run(sessionId, url, url, ids[0], `گروه ${i}`);
+    linkIds.push(Number(info.lastInsertRowid));
+  }
+  const sent = [];
+  const wa = mockWhatsApp();
+  wa.sendChat = async ({ chatId, text }) => {
+    sent.push({ chatId, text });
+    return { ok: true };
+  };
+  const { agent, csrf } = await login(app);
+  const copy = await agent.post("/api/discovery/copy-text").set("X-CSRF-Token", csrf).send({ ids: linkIds });
+  assert.equal(copy.status, 200);
+  assert.equal(copy.body.count, 57);
+  assert.match(copy.body.text, /گروه 57/);
+  const share = await agent.post("/api/discovery/share").set("X-CSRF-Token", csrf).send({
+    ids: linkIds,
+    to: "09121234567",
+    confirm: true,
+    confirmCount: 57
+  });
+  assert.equal(share.status, 200);
+  assert.equal(share.body.count, 57);
+  assert.ok(share.body.messages >= 1);
+  const urls = sent.flatMap((m) => m.text.match(/https:\/\/chat\.whatsapp\.com\/ShareAll\d+XXXXXX/g) || []);
+  assert.equal(urls.length, 57);
+  assert.equal(new Set(sent.map((m) => m.chatId)).size, 1);
 });
 
 test("HTTP 403 invite links are still listed as joinable", async () => {

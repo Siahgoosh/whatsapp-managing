@@ -75,6 +75,8 @@ export const config = {
   outreachFollowUpHours: envInt("OUTREACH_FOLLOW_UP_HOURS", 24),
   outreachMinDelaySeconds: minDelay,
   maxWhatsAppAccounts: envInt("MAX_WHATSAPP_ACCOUNTS", 8),
+  maxShareLinks: envInt("MAX_SHARE_LINKS", 200),
+  shareMessageMaxChars: envInt("SHARE_MESSAGE_MAX_CHARS", 3500),
   paths: {
     data: path.join(rootDir, "database"),
     sqlite: path.join(rootDir, "database", "app.sqlite"),

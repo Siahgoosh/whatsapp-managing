@@ -84,8 +84,7 @@ export function DiscoveredGroups() {
     const source = selectedRows.length ? selectedRows : rows;
     return source
       .filter((r) => r.openable !== false && r.validation_status !== "invalid")
-      .map((r) => r.id)
-      .slice(0, 40);
+      .map((r) => r.id);
   }
 
   async function copyLinks(ids) {
@@ -276,10 +275,12 @@ export function DiscoveredGroups() {
         <div className="modal-back" onClick={() => setShareOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(640px, 100%)" }}>
             <h3>ارسال یکجای لینک‌ها در واتساپ</h3>
-            <p className="muted">فقط به یک مخاطب، با تأیید شما. ارسال انبوه به افراد مختلف انجام نمی‌شود.</p>
+            <p className="muted">فقط به یک مخاطب، با تأیید شما. اگر تعداد لینک‌ها زیاد باشد در چند پیام پشت‌سرهم برای همان نفر فرستاده می‌شود. ارسال انبوه به افراد مختلف انجام نمی‌شود.</p>
             <label>شماره مخاطب (مثال 0912…)</label>
             <input className="input" value={shareTo} onChange={(e) => setShareTo(e.target.value)} placeholder="09121234567" />
-            <label style={{ marginTop: 10 }}>پیش‌نمایش پیام (حداکثر ۴۰ لینک)</label>
+            <label style={{ marginTop: 10 }}>
+              پیش‌نمایش پیام ({shareableIds().length} لینک)
+            </label>
             <textarea className="input" value={sharePreview} onChange={(e) => setSharePreview(e.target.value)} />
             <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
               <button className="btn secondary" onClick={() => setShareOpen(false)}>Cancel</button>
@@ -294,7 +295,7 @@ export function DiscoveredGroups() {
                       confirm: true,
                       confirmCount: ids.length
                     });
-                    pushToast("لینک‌ها ارسال شد");
+                    pushToast(`${ids.length} لینک ارسال شد`);
                     setShareOpen(false);
                   } catch (e) {
                     pushToast(e.message);
