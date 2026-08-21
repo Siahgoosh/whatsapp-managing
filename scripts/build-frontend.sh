@@ -21,8 +21,8 @@ if ! grep -q "scan-share-v" frontend/dist/ui-version.txt 2>/dev/null; then
   exit 1
 fi
 
-if ! grep -q "اسکن همه گروه‌ها همین الان" frontend/dist/assets/*.js 2>/dev/null; then
-  echo "Frontend build failed: scan button is missing from the bundle" >&2
+if ! grep -q "اکانت‌های واتساپ" frontend/dist/assets/*.js 2>/dev/null; then
+  echo "Frontend build failed: multi-account UI is missing from the bundle" >&2
   exit 1
 fi
 

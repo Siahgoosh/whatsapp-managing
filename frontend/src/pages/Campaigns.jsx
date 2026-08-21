@@ -29,6 +29,7 @@ export function CampaignsPage() {
           <thead>
             <tr>
               <th>کمپین</th>
+              <th>اکانت</th>
               <th>گروه‌ها</th>
               <th>موفق</th>
               <th>ناموفق</th>
@@ -41,6 +42,7 @@ export function CampaignsPage() {
             {items.map((c) => (
               <tr key={c.id}>
                 <td>{c.name}</td>
+                <td>{c.account_label || "—"}{c.account_phone ? ` · ${c.account_phone}` : ""}</td>
                 <td>{c.total_groups}</td>
                 <td>{c.sent_count}</td>
                 <td>{c.failed_count}</td>

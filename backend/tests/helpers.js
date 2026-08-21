@@ -22,24 +22,28 @@ export async function login(app, username = "admin", password = "testpass123") {
   return { agent, csrf: res.body.csrfToken, user: res.body.user, res };
 }
 
-export function seedGroups(count = 3) {
-  const session = getDb().prepare("SELECT id FROM whatsapp_sessions WHERE session_key = 'default'").get();
+export function seedGroups(count = 3, sessionId) {
+  const session = sessionId
+    ? getDb().prepare("SELECT id FROM whatsapp_sessions WHERE id = ?").get(sessionId)
+    : getDb().prepare("SELECT id FROM whatsapp_sessions WHERE session_key = 'default'").get();
   const stmt = getDb().prepare(
     `INSERT INTO groups (session_id, wa_id, name, member_count, membership_status, is_admin)
      VALUES (?, ?, ?, 12, 'member', 0)`
   );
   const ids = [];
   for (let i = 1; i <= count; i++) {
-    const info = stmt.run(session.id, `1203630${i}@g.us`, `گروه تست ${i}`);
+    const waId = sessionId ? `120363${sessionId}0${i}@g.us` : `1203630${i}@g.us`;
+    const name = sessionId ? `گروه تست ${sessionId}-${i}` : `گروه تست ${i}`;
+    const info = stmt.run(session.id, waId, name);
     ids.push(Number(info.lastInsertRowid));
   }
   return { sessionId: session.id, ids };
 }
 
-export function mockWhatsApp({ failTimes = 0, rateLimit = false, delayMs = 0 } = {}) {
-  const wa = waManager.primary();
+export function mockWhatsApp({ failTimes = 0, rateLimit = false, delayMs = 0, sessionKey = "default" } = {}) {
+  const wa = waManager.get(sessionKey);
   wa.status = "connected";
-  wa.sock = { user: { id: "98912@s.whatsapp.net", name: "Test" } };
+  wa.sock = { user: { id: "98912@s.whatsapp.net", name: "Test" }, logout: async () => {} };
   let fails = 0;
   wa.isConnected = () => true;
   wa.assertConnected = () => {};

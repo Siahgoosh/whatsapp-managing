@@ -41,7 +41,11 @@ export class OutreachService {
     if (this.io) this.io.emit(event, payload);
   }
 
-  session() {
+  session(sessionKey) {
+    if (sessionKey) {
+      const byKey = getDb().prepare("SELECT * FROM whatsapp_sessions WHERE session_key = ?").get(sessionKey);
+      if (byKey) return byKey;
+    }
     const row = getDb().prepare("SELECT * FROM whatsapp_sessions WHERE session_key = 'default'").get();
     if (!row) throw new HttpError(400, "نشست واتساپ پیدا نشد");
     return row;
@@ -61,8 +65,8 @@ export class OutreachService {
     return { template: this.template(), officeName: this.officeName() };
   }
 
-  listTargetGroups({ q = "" } = {}) {
-    const session = this.session();
+  listTargetGroups({ q = "", sessionKey } = {}) {
+    const session = this.session(sessionKey);
     let sql = `
       SELECT g.*,
         COALESCE(
@@ -84,7 +88,7 @@ export class OutreachService {
   }
 
   async detectAdmins(groupIds, wa) {
-    const session = this.session();
+    const session = this.session(wa?.sessionKey);
     const ids = [...new Set((groupIds || []).map(Number).filter(Boolean))];
     if (!ids.length) throw new HttpError(400, "حداقل یک گروه انتخاب کنید");
     const groups = getDb()
@@ -206,7 +210,7 @@ export class OutreachService {
   }
 
   listAdmins(filters = {}) {
-    const session = this.session();
+    const session = this.session(filters.sessionKey);
     let sql = `
       SELECT a.*, g.name AS group_name, g.wa_id AS group_wa_id, g.city, g.picture_path,
              COALESCE(gp.advertising_permission, g.advertising_permission, 'unknown') AS advertising_permission,
@@ -473,15 +477,23 @@ export class OutreachService {
     return { city: tag };
   }
 
-  handleIncoming({ chatId, chatName, body }) {
+  handleIncoming({ chatId, chatName, body, sessionKey }) {
     if (!chatId || String(chatId).endsWith("@g.us")) return null;
     const jid = jidKey(chatId);
-    const admins = getDb()
-      .prepare(
-        `SELECT a.* FROM group_admins a
-         WHERE a.active = 1 AND (a.wa_jid = ? OR a.wa_jid LIKE ?)`
-      )
-      .all(jid, `${String(jid).split("@")[0]}@%`);
+    const session = sessionKey ? this.session(sessionKey) : null;
+    const admins = session
+      ? getDb()
+          .prepare(
+            `SELECT a.* FROM group_admins a
+             WHERE a.session_id = ? AND a.active = 1 AND (a.wa_jid = ? OR a.wa_jid LIKE ?)`
+          )
+          .all(session.id, jid, `${String(jid).split("@")[0]}@%`)
+      : getDb()
+          .prepare(
+            `SELECT a.* FROM group_admins a
+             WHERE a.active = 1 AND (a.wa_jid = ? OR a.wa_jid LIKE ?)`
+          )
+          .all(jid, `${String(jid).split("@")[0]}@%`);
     if (!admins.length) return null;
     const text = String(body || "").slice(0, 4000);
     for (const admin of admins) {
@@ -508,8 +520,8 @@ export class OutreachService {
     return { admins: admins.length };
   }
 
-  inbox() {
-    const session = this.session();
+  inbox(sessionKey) {
+    const session = this.session(sessionKey);
     const adminJids = getDb()
       .prepare("SELECT DISTINCT wa_jid FROM group_admins WHERE session_id = ? AND active = 1")
       .all(session.id)
@@ -556,9 +568,9 @@ export class OutreachService {
     return { marked: updated.changes, hours };
   }
 
-  analytics() {
+  analytics(sessionKey) {
     const db = getDb();
-    const session = this.session();
+    const session = this.session(sessionKey);
     const n = (sql, ...p) => db.prepare(sql).get(...p).c;
     return {
       adminsFound: n("SELECT COUNT(*) AS c FROM group_admins WHERE session_id = ? AND active = 1", session.id),

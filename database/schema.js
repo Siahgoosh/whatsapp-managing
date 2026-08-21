@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL DEFAULT '',
   role TEXT NOT NULL DEFAULT 'operator' CHECK(role IN ('admin', 'operator')),
   active INTEGER NOT NULL DEFAULT 1,
+  whatsapp_session_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_login_at TEXT
 );

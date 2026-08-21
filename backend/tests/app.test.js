@@ -17,6 +17,7 @@ test("health check", async () => {
   assert.ok(res.body.features.includes("outreach"));
   assert.ok(res.body.features.includes("discovery"));
   assert.ok(res.body.features.includes("scan-share"));
+  assert.ok(res.body.features.includes("multi-account"));
 });
 
 test("login success, logout, and rejected bad password", async () => {
@@ -100,7 +101,7 @@ test("groups for campaigns are listed with newest last message first", async () 
   );
 });
 
-test("campaign group picker still lists members if they are on another session row", async () => {
+test("campaign group picker only lists members of the active WhatsApp account", async () => {
   const { app } = setupApp();
   seedGroups(2);
   const other = getDb()
@@ -110,7 +111,7 @@ test("campaign group picker still lists members if they are on another session r
   const { agent } = await login(app);
   const res = await agent.get("/api/groups");
   assert.equal(res.status, 200);
-  assert.equal(res.body.groups.length, 2);
+  assert.equal(res.body.groups.length, 0);
 });
 
 test("campaign rejects delay below conservative minimum in production config", async () => {

@@ -2,10 +2,10 @@ import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler } from "../utils/errors.js";
 import { getDb } from "../../../database/index.js";
-import { waManager } from "../../../services/whatsapp/WhatsAppService.js";
 import { notificationService } from "../../../services/notifications/NotificationService.js";
 import { outreachService } from "../../../services/outreach/OutreachService.js";
 import { groupLinkMonitor } from "../../../services/outreach/GroupLinkMonitor.js";
+import { accountsForUser, clientFor, resolveAccount } from "../../../services/accounts/AccountService.js";
 
 export const dashboardRouter = Router();
 dashboardRouter.use(requireAuth);
@@ -13,15 +13,33 @@ dashboardRouter.use(requireAuth);
 dashboardRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const groups = getDb().prepare("SELECT COUNT(*) AS c FROM groups WHERE membership_status = 'member'").get().c;
-    const campaigns = getDb().prepare("SELECT COUNT(*) AS c FROM campaigns").get().c;
-    const sent = getDb().prepare("SELECT COUNT(*) AS c FROM campaign_groups WHERE status = 'sent'").get().c;
-    const failed = getDb().prepare("SELECT COUNT(*) AS c FROM campaign_groups WHERE status = 'failed'").get().c;
+    const account = resolveAccount(req);
+    const sid = account?.id || 0;
+    const groups = getDb()
+      .prepare("SELECT COUNT(*) AS c FROM groups WHERE membership_status = 'member' AND session_id = ?")
+      .get(sid).c;
+    const campaigns = getDb().prepare("SELECT COUNT(*) AS c FROM campaigns WHERE session_id = ?").get(sid).c;
+    const sent = getDb()
+      .prepare(
+        `SELECT COUNT(*) AS c FROM campaign_groups cg
+         JOIN campaigns c ON c.id = cg.campaign_id
+         WHERE cg.status = 'sent' AND c.session_id = ?`
+      )
+      .get(sid).c;
+    const failed = getDb()
+      .prepare(
+        `SELECT COUNT(*) AS c FROM campaign_groups cg
+         JOIN campaigns c ON c.id = cg.campaign_id
+         WHERE cg.status = 'failed' AND c.session_id = ?`
+      )
+      .get(sid).c;
     const active = getDb()
-      .prepare("SELECT COUNT(*) AS c FROM campaigns WHERE status IN ('sending', 'queued', 'paused')")
-      .get().c;
+      .prepare("SELECT COUNT(*) AS c FROM campaigns WHERE session_id = ? AND status IN ('sending', 'queued', 'paused')")
+      .get(sid).c;
     const activity = getDb().prepare("SELECT * FROM system_logs ORDER BY id DESC LIMIT 30").all();
-    const recent = getDb().prepare("SELECT * FROM campaigns ORDER BY id DESC LIMIT 5").all();
+    const recent = getDb()
+      .prepare("SELECT * FROM campaigns WHERE session_id = ? ORDER BY id DESC LIMIT 5")
+      .all(sid);
     const finder = {
       citiesScanned: getDb().prepare("SELECT COUNT(DISTINCT city) AS c FROM public_whatsapp_groups").get().c,
       groupsFound: getDb().prepare("SELECT COUNT(*) AS c FROM public_whatsapp_groups").get().c,
@@ -36,7 +54,9 @@ dashboardRouter.get(
       notJoined: getDb().prepare("SELECT COUNT(*) AS c FROM public_whatsapp_groups WHERE joined_status = 'not_joined'").get().c
     };
     res.json({
-      whatsapp: waManager.primary().publicStatus(),
+      whatsapp: clientFor(account).publicStatus(),
+      account,
+      accounts: accountsForUser(req.user),
       stats: {
         groups,
         campaigns,
@@ -44,7 +64,7 @@ dashboardRouter.get(
         failed,
         active,
         finder,
-        outreach: outreachService.analytics(),
+        outreach: outreachService.analytics(account?.sessionKey),
         discovery: groupLinkMonitor.analytics()
       },
       activity,

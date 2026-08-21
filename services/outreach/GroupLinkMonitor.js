@@ -46,13 +46,17 @@ export class GroupLinkMonitor {
     if (this.io) this.io.emit(event, payload);
   }
 
-  session() {
+  session(sessionKey) {
+    if (sessionKey) {
+      const byKey = getDb().prepare("SELECT * FROM whatsapp_sessions WHERE session_key = ?").get(sessionKey);
+      if (byKey) return byKey;
+    }
     return getDb().prepare("SELECT * FROM whatsapp_sessions WHERE session_key = 'default'").get();
   }
 
-  async handleGroupMessage({ chatId, chatName, body, senderJid, senderName }) {
+  async handleGroupMessage({ chatId, chatName, body, senderJid, senderName, sessionKey }) {
     if (!chatId || !String(chatId).endsWith("@g.us")) return [];
-    const session = this.session();
+    const session = this.session(sessionKey);
     if (!session) return [];
     const source = getDb()
       .prepare("SELECT * FROM groups WHERE session_id = ? AND wa_id = ? AND membership_status = 'member'")
@@ -319,7 +323,7 @@ export class GroupLinkMonitor {
   async scanMemberGroups(wa) {
     if (this.scanning) throw new HttpError(409, "اسکن در حال اجراست", "scan_running");
     this.scanning = true;
-    const session = this.session();
+    const session = this.session(wa?.sessionKey);
     if (!session) throw new HttpError(400, "نشست واتساپ پیدا نشد");
     const groups = getDb()
       .prepare("SELECT * FROM groups WHERE session_id = ? AND membership_status = 'member' ORDER BY name COLLATE NOCASE")
@@ -422,7 +426,7 @@ export class GroupLinkMonitor {
         `INSERT INTO inbox_messages (session_id, chat_id, chat_name, chat_type, direction, body, unread)
          VALUES (?, ?, ?, 'contact', 'out', ?, 0)`
       )
-      .run(this.session().id, jid, to, text.slice(0, 8000));
+      .run(this.session(wa?.sessionKey).id, jid, to, text.slice(0, 8000));
     return { ok: true, chatId: jid, count: rows.length, text };
   }
 

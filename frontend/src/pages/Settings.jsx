@@ -10,13 +10,18 @@ export function SettingsPage() {
   const [quicks, setQuicks] = useState([]);
   const [shortcut, setShortcut] = useState("/price");
   const [qmsg, setQmsg] = useState("");
-  const [newUser, setNewUser] = useState({ username: "", password: "", role: "operator", displayName: "" });
+  const [newUser, setNewUser] = useState({ username: "", password: "", role: "operator", displayName: "", whatsappSessionId: "" });
+  const [accounts, setAccounts] = useState([]);
 
   async function load() {
     const d = await api.settings();
     setS(d);
     setForm(d.settings || {});
-    if (user.role === "admin") setUsers((await api.users()).users || []);
+    if (user.role === "admin") {
+      const u = await api.users();
+      setUsers(u.users || []);
+      setAccounts(u.accounts || []);
+    }
     setQuicks((await api.quickReplies()).items || []);
   }
   useEffect(() => { load().catch(() => {}); }, []);
@@ -59,9 +64,27 @@ export function SettingsPage() {
           <div className="card">
             <h3>کاربران (Admin / Operator)</h3>
             {users.map((u) => (
-              <div key={u.id} className="row" style={{ justifyContent: "space-between" }}>
+              <div key={u.id} className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <span>{u.username} · {u.role}</span>
-                <span className="muted">{u.last_login_at || "—"}</span>
+                {accounts.length ? (
+                  <select
+                    className="input"
+                    style={{ maxWidth: 220 }}
+                    value={u.whatsapp_session_id || ""}
+                    onChange={(e) =>
+                      api.assignUserAccount(u.id, Number(e.target.value)).then(load).catch((err) => pushToast(err.message))
+                    }
+                  >
+                    <option value="">اکانت واتساپ</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label}{a.phone ? ` · ${a.phone}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="muted">{u.account_label || "—"}</span>
+                )}
               </div>
             ))}
             <hr />
@@ -72,7 +95,35 @@ export function SettingsPage() {
               <option value="operator">operator</option>
               <option value="admin">admin</option>
             </select>
-            <button className="btn" style={{ marginTop: 8 }} onClick={() => api.createUser(newUser).then(load).catch((e) => pushToast(e.message))}>ایجاد کاربر</button>
+            {accounts.length > 0 && (
+              <select
+                className="input"
+                value={newUser.whatsappSessionId}
+                onChange={(e) => setNewUser({ ...newUser, whatsappSessionId: e.target.value })}
+              >
+                <option value="">اکانت واتساپ (برای اپراتور)</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}{a.phone ? ` · ${a.phone}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              className="btn"
+              style={{ marginTop: 8 }}
+              onClick={() =>
+                api
+                  .createUser({
+                    ...newUser,
+                    whatsappSessionId: newUser.whatsappSessionId ? Number(newUser.whatsappSessionId) : undefined
+                  })
+                  .then(load)
+                  .catch((e) => pushToast(e.message))
+              }
+            >
+              ایجاد کاربر
+            </button>
           </div>
         )}
         {user.role === "admin" && (

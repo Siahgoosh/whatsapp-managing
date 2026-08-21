@@ -35,7 +35,10 @@ export function CampaignDetail() {
       <div className="topbar">
         <div>
           <h2>{c.name}</h2>
-          <p className="muted">پیشرفت زنده بدون نیاز به رفرش صفحه</p>
+          <p className="muted">
+            ارسال با {c.account_label || "اکانت واتساپ"}
+            {c.account_phone ? ` · ${c.account_phone}` : ""} — پیشرفت زنده بدون نیاز به رفرش صفحه
+          </p>
         </div>
         <div className="row">
           <button className="btn" onClick={() => api.startCampaign(id).then(load).catch((e) => pushToast(e.message))}>Start</button>

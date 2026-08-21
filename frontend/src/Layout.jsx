@@ -1,7 +1,7 @@
 import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { api, setCsrf } from "./api.js";
-import { statusFa, useApp } from "./store.jsx";
+import { accountLabel, statusFa, useApp } from "./store.jsx";
 
 const NAV = [
   {
@@ -38,9 +38,11 @@ const NAV = [
 const HIGHLIGHT = new Set(["/admin-outreach", "/discovered-groups"]);
 
 export function Layout() {
-  const { user, setUser, theme, setTheme, wa, notifications } = useApp();
+  const { user, setUser, theme, setTheme, wa, switchAccount, notifications } = useApp();
   const nav = useNavigate();
   const unread = notifications.filter((n) => !n.read).length;
+  const accounts = wa.accounts || [];
+  const activeId = wa.account?.id || "";
 
   async function logout() {
     await api.logout();
@@ -73,6 +75,24 @@ export function Layout() {
         </nav>
         <div className="sidebar-foot">
           <div className={`badge ${wa.status === "connected" ? "ok" : "warn"}`}>{statusFa(wa.status)}</div>
+          {accounts.length > 1 ? (
+            <select
+              className="input"
+              style={{ marginTop: 8 }}
+              value={activeId}
+              onChange={(e) => switchAccount(Number(e.target.value)).catch(() => {})}
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {accountLabel(a)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              {accountLabel(wa.account)}
+            </div>
+          )}
           <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
             {user?.displayName} · {user?.role === "admin" ? "مدیر" : "اپراتور"}
             {unread ? ` · ${unread} اعلان` : ""}

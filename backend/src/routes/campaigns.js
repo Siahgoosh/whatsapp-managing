@@ -8,6 +8,7 @@ import { isAllowedUpload, saveBuffer } from "../utils/files.js";
 import { campaignService } from "../../../services/campaign/CampaignService.js";
 import { campaignQueue } from "../../../queue/CampaignQueue.js";
 import { getDb } from "../../../database/index.js";
+import { canUseAccount, resolveAccount } from "../../../services/accounts/AccountService.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -62,10 +63,14 @@ campaignsRouter.post(
         subdir: "campaigns"
       });
     }
-    const session = getDb().prepare("SELECT id FROM whatsapp_sessions WHERE session_key = 'default'").get();
+    const account = resolveAccount(req);
+    const sessionId = parsed.data.sessionId || account?.id;
+    if (!sessionId || !canUseAccount(req.user, sessionId)) {
+      throw new HttpError(403, "این اکانت واتساپ برای شما مجاز نیست");
+    }
     const created = campaignService.create(req.user, {
       ...parsed.data,
-      sessionId: parsed.data.sessionId || session.id,
+      sessionId,
       attachment
     });
     res.status(201).json(created);

@@ -22,7 +22,7 @@ export function attachSession(req, res, next) {
   req.user = null;
   if (req.sessionRow?.user_id) {
     req.user = getDb()
-      .prepare("SELECT id, username, display_name, role, active FROM users WHERE id = ?")
+      .prepare("SELECT id, username, display_name, role, active, whatsapp_session_id FROM users WHERE id = ?")
       .get(req.sessionRow.user_id);
     if (req.user && !req.user.active) req.user = null;
     if (req.user) sessionStore.get().touch(req.sessionId);

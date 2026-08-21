@@ -69,8 +69,8 @@ export class CampaignQueue {
 
   async start(campaignId, user) {
     const { campaign } = campaignService.get(campaignId, user.id, user.role);
-    const wa = waManager.primary();
-    if (!wa.isConnected()) {
+    const wa = waManager.byId(campaign.session_id);
+    if (!wa?.isConnected()) {
       throw Object.assign(new Error("WhatsApp is not connected"), { status: 409, code: "not_connected" });
     }
     if (["sending", "queued"].includes(campaign.status)) return this.snapshot(campaignId);
@@ -113,7 +113,8 @@ export class CampaignQueue {
   resume(campaignId, user) {
     const { campaign } = campaignService.get(campaignId, user.id, user.role);
     if (campaign.status !== "paused") return this.snapshot(campaignId);
-    if (!waManager.primary().isConnected()) {
+    const wa = waManager.byId(campaign.session_id);
+    if (!wa?.isConnected()) {
       throw Object.assign(new Error("WhatsApp is not connected"), { status: 409 });
     }
     campaignService.setStatus(campaignId, "queued", { pause_reason: null });
@@ -140,6 +141,23 @@ export class CampaignQueue {
     });
     this.emit(campaignId, this.snapshot(campaignId));
     return this.snapshot(campaignId);
+  }
+
+  pauseSession(sessionId, reason) {
+    const rows = getDb()
+      .prepare("SELECT id, user_id, name FROM campaigns WHERE session_id = ? AND status IN ('sending', 'queued')")
+      .all(Number(sessionId));
+    for (const row of rows) {
+      campaignService.setStatus(row.id, "paused", { paused_at: nowSql(), pause_reason: reason });
+      campaignLog(row.id, "paused", reason);
+      notificationService.create({
+        userId: row.user_id,
+        type: "campaign_paused",
+        title: "کمپین متوقف موقت شد",
+        body: reason
+      });
+      this.emit(row.id, this.snapshot(row.id));
+    }
   }
 
   pauseAll(reason) {
@@ -176,17 +194,32 @@ export class CampaignQueue {
 
   async tick() {
     this.processScheduled();
-    const campaign = getDb()
-      .prepare("SELECT * FROM campaigns WHERE status IN ('queued', 'sending') ORDER BY id ASC LIMIT 1")
-      .get();
-    if (!campaign) return;
-    if (this.running.has(campaign.id)) return;
-    this.running.set(campaign.id, true);
-    try {
-      await this.processOne(campaign);
-    } finally {
-      this.running.delete(campaign.id);
+    const busySessions = new Set();
+    for (const campaignId of this.running.keys()) {
+      const row = getDb().prepare("SELECT session_id FROM campaigns WHERE id = ?").get(campaignId);
+      if (row) busySessions.add(row.session_id);
     }
+    const queued = getDb()
+      .prepare("SELECT * FROM campaigns WHERE status IN ('queued', 'sending') ORDER BY id ASC")
+      .all();
+    const picked = [];
+    const seen = new Set(busySessions);
+    for (const campaign of queued) {
+      if (this.running.has(campaign.id)) continue;
+      if (seen.has(campaign.session_id)) continue;
+      seen.add(campaign.session_id);
+      picked.push(campaign);
+    }
+    await Promise.all(
+      picked.map(async (campaign) => {
+        this.running.set(campaign.id, true);
+        try {
+          await this.processOne(campaign);
+        } finally {
+          this.running.delete(campaign.id);
+        }
+      })
+    );
   }
 
   processScheduled() {
@@ -198,7 +231,9 @@ export class CampaignQueue {
       )
       .all();
     for (const item of due) {
-      if (!waManager.primary().isConnected()) {
+      const campaign = getDb().prepare("SELECT * FROM campaigns WHERE id = ?").get(item.campaign_id);
+      const wa = campaign ? waManager.byId(campaign.session_id) : null;
+      if (!wa?.isConnected()) {
         campaignService.setStatus(item.campaign_id, "paused", {
           pause_reason: "whatsapp_disconnected",
           paused_at: nowSql()
@@ -220,7 +255,8 @@ export class CampaignQueue {
   }
 
   async processOne(campaign) {
-    if (!waManager.primary().isConnected()) {
+    const wa = waManager.byId(campaign.session_id);
+    if (!wa?.isConnected()) {
       campaignService.setStatus(campaign.id, "paused", {
         pause_reason: "whatsapp_disconnected",
         paused_at: nowSql()
@@ -342,7 +378,8 @@ export class CampaignQueue {
   }
 
   async sendWithRetry(campaign, job, attachment) {
-    const wa = waManager.primary();
+    const wa = waManager.byId(campaign.session_id);
+    if (!wa?.isConnected()) throw Object.assign(new Error("WhatsApp is not connected"), { status: 409 });
     const payload = {
       waId: job.wa_id,
       text: campaign.message,

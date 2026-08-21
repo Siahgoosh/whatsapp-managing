@@ -10,11 +10,15 @@ export class CampaignService {
   list(userId, role) {
     const sql =
       role === "admin"
-        ? `SELECT c.*, u.username AS owner
-           FROM campaigns c LEFT JOIN users u ON u.id = c.user_id
+        ? `SELECT c.*, u.username AS owner, s.label AS account_label, s.phone AS account_phone
+           FROM campaigns c
+           LEFT JOIN users u ON u.id = c.user_id
+           LEFT JOIN whatsapp_sessions s ON s.id = c.session_id
            ORDER BY c.id DESC`
-        : `SELECT c.*, u.username AS owner
-           FROM campaigns c LEFT JOIN users u ON u.id = c.user_id
+        : `SELECT c.*, u.username AS owner, s.label AS account_label, s.phone AS account_phone
+           FROM campaigns c
+           LEFT JOIN users u ON u.id = c.user_id
+           LEFT JOIN whatsapp_sessions s ON s.id = c.session_id
            WHERE c.user_id = ? ORDER BY c.id DESC`;
     return role === "admin" ? getDb().prepare(sql).all() : getDb().prepare(sql).all(userId);
   }
@@ -22,8 +26,22 @@ export class CampaignService {
   get(id, userId, role) {
     const campaign =
       role === "admin"
-        ? getDb().prepare("SELECT * FROM campaigns WHERE id = ?").get(id)
-        : getDb().prepare("SELECT * FROM campaigns WHERE id = ? AND user_id = ?").get(id, userId);
+        ? getDb()
+            .prepare(
+              `SELECT c.*, s.label AS account_label, s.phone AS account_phone
+               FROM campaigns c
+               LEFT JOIN whatsapp_sessions s ON s.id = c.session_id
+               WHERE c.id = ?`
+            )
+            .get(id)
+        : getDb()
+            .prepare(
+              `SELECT c.*, s.label AS account_label, s.phone AS account_phone
+               FROM campaigns c
+               LEFT JOIN whatsapp_sessions s ON s.id = c.session_id
+               WHERE c.id = ? AND c.user_id = ?`
+            )
+            .get(id, userId);
     if (!campaign) throw new HttpError(404, "کمپین پیدا نشد");
     const groups = getDb()
       .prepare(

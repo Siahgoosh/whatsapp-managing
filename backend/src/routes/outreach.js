@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler, HttpError } from "../utils/errors.js";
 import { outreachService } from "../../../services/outreach/OutreachService.js";
-import { waManager } from "../../../services/whatsapp/WhatsAppService.js";
+import { withAccount } from "../../../services/accounts/AccountService.js";
 import { auditLog } from "../utils/logger.js";
 
 export const outreachRouter = Router();
@@ -23,13 +23,18 @@ const idsSchema = z.object({
 outreachRouter.get(
   "/groups",
   asyncHandler(async (req, res) => {
-    res.json({ groups: outreachService.listTargetGroups({ q: req.query.q || "" }), cities: outreachService.cities() });
+    const { account } = withAccount(req);
+    res.json({
+      groups: outreachService.listTargetGroups({ q: req.query.q || "", sessionKey: account.sessionKey }),
+      cities: outreachService.cities()
+    });
   })
 );
 
 outreachRouter.get(
   "/admins",
   asyncHandler(async (req, res) => {
+    const { account } = withAccount(req);
     res.json({
       admins: outreachService.listAdmins({
         q: req.query.q || "",
@@ -38,7 +43,8 @@ outreachRouter.get(
         permission: req.query.permission || "",
         status: req.query.status || "",
         dateFrom: req.query.dateFrom || "",
-        dateTo: req.query.dateTo || ""
+        dateTo: req.query.dateTo || "",
+        sessionKey: account.sessionKey
       })
     });
   })
@@ -65,14 +71,16 @@ outreachRouter.put(
 outreachRouter.get(
   "/analytics",
   asyncHandler(async (req, res) => {
-    res.json(outreachService.analytics());
+    const { account } = withAccount(req);
+    res.json(outreachService.analytics(account.sessionKey));
   })
 );
 
 outreachRouter.get(
   "/inbox",
   asyncHandler(async (req, res) => {
-    res.json({ conversations: outreachService.inbox() });
+    const { account } = withAccount(req);
+    res.json({ conversations: outreachService.inbox(account.sessionKey) });
   })
 );
 
@@ -102,8 +110,9 @@ outreachRouter.post(
   asyncHandler(async (req, res) => {
     const parsed = idsSchema.safeParse(req.body);
     if (!parsed.success || !parsed.data.groupIds?.length) throw new HttpError(400, "گروهی انتخاب نشده");
-    if (!waManager.primary().isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
-    const result = await outreachService.detectAdmins(parsed.data.groupIds, waManager.primary());
+    const { wa } = withAccount(req);
+    if (!wa.isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
+    const result = await outreachService.detectAdmins(parsed.data.groupIds, wa);
     auditLog(req.user.id, "outreach_detect", `groups=${parsed.data.groupIds.length}`, req.ip);
     res.json(result);
   })
@@ -132,14 +141,15 @@ outreachRouter.post(
   asyncHandler(async (req, res) => {
     const parsed = idsSchema.safeParse(req.body);
     if (!parsed.success || !parsed.data.adminIds?.length) throw new HttpError(400, "مدیری انتخاب نشده");
-    if (!waManager.primary().isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
+    const { wa } = withAccount(req);
+    if (!wa.isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
     const result = await outreachService.send({
       adminIds: parsed.data.adminIds,
       confirm: parsed.data.confirm,
       confirmCount: parsed.data.confirmCount,
       force: parsed.data.force,
       userId: req.user.id,
-      wa: waManager.primary()
+      wa
     });
     res.json(result);
   })

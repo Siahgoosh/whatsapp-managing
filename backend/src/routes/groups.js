@@ -5,6 +5,7 @@ import { asyncHandler, HttpError } from "../utils/errors.js";
 import { waManager } from "../../../services/whatsapp/WhatsAppService.js";
 import { getDb } from "../../../database/index.js";
 import { outreachService } from "../../../services/outreach/OutreachService.js";
+import { clientFor, resolveAccount } from "../../../services/accounts/AccountService.js";
 
 export const groupsRouter = Router();
 groupsRouter.use(requireAuth);
@@ -14,26 +15,28 @@ groupsRouter.get(
   asyncHandler(async (req, res) => {
     let groups = [];
     try {
-      groups = waManager.primary().listGroups({
+      const account = resolveAccount(req);
+      const wa = clientFor(account);
+      groups = wa.listGroups({
         q: req.query.q || "",
         favorite: req.query.favorite,
         admin: req.query.admin
       });
     } catch (err) {
-      groups = getDb()
-        .prepare("SELECT * FROM groups WHERE membership_status = 'member' ORDER BY name COLLATE NOCASE")
-        .all();
+      groups = [];
     }
-    res.json({ groups, count: groups.length });
+    res.json({ groups, count: groups.length, account: resolveAccount(req) });
   })
 );
 
 groupsRouter.post(
   "/sync",
   asyncHandler(async (req, res) => {
-    if (!waManager.primary().isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
-    const groups = await waManager.primary().syncGroups();
-    res.json({ groups });
+    const account = resolveAccount(req);
+    const wa = clientFor(account);
+    if (!wa.isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
+    const groups = await wa.syncGroups();
+    res.json({ groups, account });
   })
 );
 

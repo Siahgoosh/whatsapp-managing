@@ -50,6 +50,12 @@ export function statusFa(s) {
   return STATUS_FA[s] || s;
 }
 
+export function accountLabel(account) {
+  if (!account) return "بدون اکانت";
+  const name = account.label || account.accountName || "اکانت واتساپ";
+  return account.phone ? `${name} · ${account.phone}` : name;
+}
+
 export function AppProvider({ children }) {
   const [user, setUser] = useState(undefined);
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "dark");
@@ -76,13 +82,32 @@ export function AppProvider({ children }) {
     api.waStatus().then(setWa).catch(() => {});
     api.notifications().then((d) => setNotifications(d.notifications || [])).catch(() => {});
     const socket = io({ withCredentials: true });
-    socket.on("whatsapp:status", setWa);
+    socket.on("whatsapp:status", (s) => {
+      setWa((prev) => {
+        const key = prev.sessionKey || prev.account?.sessionKey;
+        if (s.sessionKey && key && s.sessionKey !== key) {
+          const accounts = (prev.accounts || []).map((a) =>
+            a.sessionKey === s.sessionKey
+              ? { ...a, status: s.status, phone: s.phone, accountName: s.accountName }
+              : a
+          );
+          return { ...prev, accounts };
+        }
+        return { ...prev, ...s };
+      });
+    });
     socket.on("notification:new", (n) => {
       setNotifications((prev) => [n, ...prev]);
       pushToast(n.title);
     });
     return () => socket.close();
   }, [user]);
+
+  async function switchAccount(sessionId) {
+    const s = await api.waSetActive(sessionId);
+    setWa(s);
+    return s;
+  }
 
   function pushToast(text) {
     const id = Date.now();
@@ -91,7 +116,7 @@ export function AppProvider({ children }) {
   }
 
   const value = useMemo(
-    () => ({ user, setUser, theme, setTheme, wa, setWa, pushToast, notifications, setNotifications, statusFa }),
+    () => ({ user, setUser, theme, setTheme, wa, setWa, switchAccount, pushToast, notifications, setNotifications, statusFa }),
     [user, theme, wa, notifications]
   );
 

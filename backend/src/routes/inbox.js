@@ -3,8 +3,8 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler, HttpError } from "../utils/errors.js";
 import { getDb } from "../../../database/index.js";
-import { waManager } from "../../../services/whatsapp/WhatsAppService.js";
 import { aiService } from "../../../services/ai/AiService.js";
+import { clientFor, resolveAccount } from "../../../services/accounts/AccountService.js";
 
 export const inboxRouter = Router();
 inboxRouter.use(requireAuth);
@@ -12,7 +12,8 @@ inboxRouter.use(requireAuth);
 inboxRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const session = getDb().prepare("SELECT id FROM whatsapp_sessions WHERE session_key = 'default'").get();
+    const account = resolveAccount(req);
+    if (!account) throw new HttpError(400, "اکانت واتساپ پیدا نشد");
     const convos = getDb()
       .prepare(
         `SELECT chat_id, chat_name, chat_type,
@@ -22,7 +23,7 @@ inboxRouter.get(
          GROUP BY chat_id
          ORDER BY last_id DESC`
       )
-      .all(session.id);
+      .all(account.id);
     const withLast = convos.map((c) => {
       const last = getDb().prepare("SELECT * FROM inbox_messages WHERE id = ?").get(c.last_id);
       return { ...c, lastMessage: last };
@@ -34,12 +35,14 @@ inboxRouter.get(
 inboxRouter.get(
   "/:chatId",
   asyncHandler(async (req, res) => {
+    const account = resolveAccount(req);
+    if (!account) throw new HttpError(400, "اکانت واتساپ پیدا نشد");
     const messages = getDb()
-      .prepare("SELECT * FROM inbox_messages WHERE chat_id = ? ORDER BY id ASC LIMIT 400")
-      .all(req.params.chatId);
+      .prepare("SELECT * FROM inbox_messages WHERE session_id = ? AND chat_id = ? ORDER BY id ASC LIMIT 400")
+      .all(account.id, req.params.chatId);
     getDb()
-      .prepare("UPDATE inbox_messages SET unread = 0 WHERE chat_id = ? AND direction = 'in'")
-      .run(req.params.chatId);
+      .prepare("UPDATE inbox_messages SET unread = 0 WHERE session_id = ? AND chat_id = ? AND direction = 'in'")
+      .run(account.id, req.params.chatId);
     res.json({ messages });
   })
 );
@@ -54,9 +57,10 @@ inboxRouter.post(
   asyncHandler(async (req, res) => {
     const parsed = replySchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "پیام نامعتبر است");
-    if (!waManager.primary().isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
-    await waManager.primary().sendChat({ chatId: parsed.data.chatId, text: parsed.data.text });
-    const session = getDb().prepare("SELECT id FROM whatsapp_sessions WHERE session_key = 'default'").get();
+    const account = resolveAccount(req);
+    const wa = clientFor(account);
+    if (!wa.isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
+    await wa.sendChat({ chatId: parsed.data.chatId, text: parsed.data.text });
     const last = getDb()
       .prepare("SELECT chat_name, chat_type FROM inbox_messages WHERE chat_id = ? ORDER BY id DESC LIMIT 1")
       .get(parsed.data.chatId);
@@ -66,7 +70,7 @@ inboxRouter.post(
          VALUES (?, ?, ?, ?, 'out', ?, 0)`
       )
       .run(
-        session.id,
+        account.id,
         parsed.data.chatId,
         last?.chat_name || parsed.data.chatId,
         last?.chat_type || "contact",

@@ -4,7 +4,7 @@ import { requireAuth } from "../middleware/auth.js";
 import { asyncHandler, HttpError } from "../utils/errors.js";
 import { getDb } from "../../../database/index.js";
 import { groupLinkMonitor } from "../../../services/outreach/GroupLinkMonitor.js";
-import { waManager } from "../../../services/whatsapp/WhatsAppService.js";
+import { withAccount } from "../../../services/accounts/AccountService.js";
 
 export const discoveryRouter = Router();
 discoveryRouter.use(requireAuth);
@@ -41,7 +41,7 @@ discoveryRouter.post(
 discoveryRouter.post(
   "/scan",
   asyncHandler(async (req, res) => {
-    const wa = waManager.primary();
+    const { wa } = withAccount(req);
     if (wa.isConnected()) {
       try {
         await wa.syncGroups();
@@ -75,10 +75,11 @@ discoveryRouter.post(
       })
       .safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "داده نامعتبر");
-    if (!waManager.primary().isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
+    const { wa } = withAccount(req);
+    if (!wa.isConnected()) throw new HttpError(409, "واتساپ متصل نیست");
     const result = await groupLinkMonitor.shareToContact({
       ...parsed.data,
-      wa: waManager.primary(),
+      wa,
       userId: req.user.id
     });
     res.json(result);
@@ -116,9 +117,10 @@ discoveryRouter.post(
 discoveryRouter.post(
   "/:id/confirm-join",
   asyncHandler(async (req, res) => {
-    if (waManager.primary().isConnected()) {
+    const { wa } = withAccount(req);
+    if (wa.isConnected()) {
       try {
-        await waManager.primary().syncGroups();
+        await wa.syncGroups();
       } catch {
         /* membership check still runs on stored groups */
       }

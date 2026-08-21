@@ -40,7 +40,9 @@ io.use((socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  socket.emit("whatsapp:status", waManager.primary().publicStatus());
+  for (const client of waManager.clients.values()) {
+    socket.emit("whatsapp:status", client.publicStatus());
+  }
 });
 
 notificationService.attach(io);
@@ -50,33 +52,41 @@ groupLinkMonitor.attach(io);
 outreachService.attach(io);
 campaignQueue.ensureLoop();
 
-const wa = waManager.primary();
-wa.on("status", (status) => io.emit("whatsapp:status", status));
-wa.on("qr", () => io.emit("whatsapp:qr", { hasQr: true }));
-wa.on("disconnected", ({ reason }) => {
-  if (reason === "authentication_failed" || reason === "reconnecting") {
-    campaignQueue.pauseAll(reason === "authentication_failed" ? "session_expired" : "whatsapp_disconnected");
-    notificationService.create({
-      type: "whatsapp_disconnected",
-      title: "واتساپ قطع شد",
-      body: reason === "authentication_failed" ? "نشست منقضی شد." : "ارتباط واتساپ قطع شد."
-    });
-  }
-});
-wa.on("inbox", (payload) => {
-  io.emit("inbox:message", payload);
-  autoReplyService.handleIncoming({ sessionKey: "default", ...payload }).catch(() => {});
-});
-wa.on("group-message", (payload) => {
-  groupLinkMonitor.handleGroupMessage(payload).catch((err) => logger.warn({ err: err.message }, "link monitor"));
-});
-wa.on("private-message", (payload) => {
-  outreachService.handleIncoming(payload);
-});
-wa.on("groups-synced", () => {
-  groupLinkMonitor.refreshJoined();
-  outreachService.markFollowUps();
-});
+function bindWhatsAppClient(client) {
+  client.on("status", (status) => io.emit("whatsapp:status", status));
+  client.on("qr", (payload) => io.emit("whatsapp:qr", { hasQr: true, sessionKey: client.sessionKey, ...payload }));
+  client.on("disconnected", ({ reason }) => {
+    if (reason === "authentication_failed" || reason === "reconnecting") {
+      const row = client.row();
+      if (row) {
+        campaignQueue.pauseSession(row.id, reason === "authentication_failed" ? "session_expired" : "whatsapp_disconnected");
+      }
+      notificationService.create({
+        type: "whatsapp_disconnected",
+        title: "واتساپ قطع شد",
+        body: `${row?.label || client.sessionKey}: ${reason === "authentication_failed" ? "نشست منقضی شد." : "ارتباط واتساپ قطع شد."}`
+      });
+    }
+  });
+  client.on("inbox", (payload) => {
+    io.emit("inbox:message", { sessionKey: client.sessionKey, ...payload });
+    autoReplyService.handleIncoming({ sessionKey: client.sessionKey, ...payload }).catch(() => {});
+  });
+  client.on("group-message", (payload) => {
+    groupLinkMonitor
+      .handleGroupMessage({ sessionKey: client.sessionKey, ...payload })
+      .catch((err) => logger.warn({ err: err.message }, "link monitor"));
+  });
+  client.on("private-message", (payload) => {
+    outreachService.handleIncoming({ sessionKey: client.sessionKey, ...payload });
+  });
+  client.on("groups-synced", () => {
+    groupLinkMonitor.refreshJoined();
+    outreachService.markFollowUps();
+  });
+}
+
+waManager.onClient(bindWhatsAppClient);
 
 waManager.startAll().catch((err) => logger.warn({ err: err.message }, "restore sessions"));
 

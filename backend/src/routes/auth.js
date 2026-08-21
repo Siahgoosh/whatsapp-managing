@@ -8,6 +8,7 @@ import { loginLimiter } from "../middleware/security.js";
 import { asyncHandler } from "../utils/errors.js";
 import { auditLog, systemLog } from "../utils/logger.js";
 import { HttpError } from "../utils/errors.js";
+import { accountState } from "../../../services/accounts/AccountService.js";
 
 export const authRouter = Router();
 
@@ -32,9 +33,17 @@ authRouter.post(
     setSessionCookie(res, sess.sid, sess.expiresAt);
     systemLog("login", "User logged in", { userId: user.id, ip: req.ip });
     auditLog(user.id, "login", "successful login", req.ip);
+    const sessionRow = sessionStore.get().get(sess.sid);
     res.json({
-      user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role },
-      csrfToken: sess.csrfSecret
+      user: {
+        id: user.id,
+        username: user.username,
+        displayName: user.display_name,
+        role: user.role,
+        whatsappSessionId: user.whatsapp_session_id || null
+      },
+      csrfToken: sess.csrfSecret,
+      ...accountState({ user, sessionRow })
     });
   })
 );
@@ -53,15 +62,17 @@ authRouter.post(
 authRouter.get(
   "/me",
   asyncHandler(async (req, res) => {
-    if (!req.user) return res.json({ user: null, csrfToken: null });
+    if (!req.user) return res.json({ user: null, csrfToken: null, account: null, accounts: [] });
     res.json({
       user: {
         id: req.user.id,
         username: req.user.username,
         displayName: req.user.display_name,
-        role: req.user.role
+        role: req.user.role,
+        whatsappSessionId: req.user.whatsapp_session_id || null
       },
-      csrfToken: req.csrfToken
+      csrfToken: req.csrfToken,
+      ...accountState(req)
     });
   })
 );

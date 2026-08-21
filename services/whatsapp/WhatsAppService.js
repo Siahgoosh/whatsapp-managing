@@ -70,6 +70,8 @@ export class WhatsAppService extends EventEmitter {
     const durationMs = row?.status === "connected" && connectedAt ? Date.now() - connectedAt.getTime() : 0;
     return {
       sessionKey: this.sessionKey,
+      sessionId: row?.id || null,
+      label: row?.label || null,
       status: row?.status || this.status,
       phone: row?.phone || null,
       accountName: row?.account_name || null,
@@ -156,7 +158,7 @@ export class WhatsAppService extends EventEmitter {
     if (qr) {
       this.qrDataUrl = await qrcode.toDataURL(qr, { margin: 1, width: 320 });
       this.setStatus("qr_required", { last_qr_at: nowSql(), last_error: null });
-      this.emit("qr", { hasQr: true });
+      this.emit("qr", { hasQr: true, sessionKey: this.sessionKey });
       systemLog("qr_generated", "QR generated for WhatsApp login");
     }
     if (connection === "open") {
@@ -247,6 +249,7 @@ export class WhatsAppService extends EventEmitter {
           .run(session.id, chatId);
         if (body) {
           this.emit("group-message", {
+            sessionKey: this.sessionKey,
             chatId,
             chatName,
             body,
@@ -265,9 +268,9 @@ export class WhatsAppService extends EventEmitter {
            VALUES (?, ?, ?, ?, 'in', ?, 1, ?)`
         )
         .run(session.id, chatId, chatName, chatType, String(body).slice(0, 8000), msg.key.id || null);
-      this.emit("inbox", { chatId, chatName, chatType, body });
+      this.emit("inbox", { sessionKey: this.sessionKey, chatId, chatName, chatType, body });
       if (chatType === "contact") {
-        this.emit("private-message", { chatId, chatName, body, senderName });
+        this.emit("private-message", { sessionKey: this.sessionKey, chatId, chatName, body, senderName });
       }
     }
   }
@@ -439,22 +442,17 @@ export class WhatsAppService extends EventEmitter {
     const order = " ORDER BY activity_at DESC, g.is_favorite DESC, g.name COLLATE NOCASE ASC";
 
     try {
-      const scoped = run(
+      return run(
         `${select} WHERE g.session_id = ? AND g.membership_status = 'member'${extraSql}${order}`,
         [session.id, ...extraParams]
-      );
-      if (scoped.length) return scoped;
-      return run(
-        `${select} WHERE g.membership_status = 'member'${extraSql}${order}`,
-        extraParams
       );
     } catch (err) {
       logger.warn({ err: err.message }, "group list query failed; using simple membership list");
       const rows = getDb()
         .prepare(
-          `SELECT * FROM groups WHERE membership_status = 'member' ORDER BY name COLLATE NOCASE ASC`
+          `SELECT * FROM groups WHERE session_id = ? AND membership_status = 'member' ORDER BY name COLLATE NOCASE ASC`
         )
-        .all();
+        .all(session.id);
       return rows.sort((a, b) => String(b.last_activity_at || "").localeCompare(String(a.last_activity_at || "")));
     }
   }
@@ -545,11 +543,23 @@ function mimeFromName(name) {
 
 export const waManager = {
   clients: new Map(),
+  binders: [],
+  onClient(fn) {
+    this.binders.push(fn);
+    for (const client of this.clients.values()) fn(client);
+  },
   get(sessionKey = "default") {
     if (!this.clients.has(sessionKey)) {
-      this.clients.set(sessionKey, new WhatsAppService(sessionKey));
+      const client = new WhatsAppService(sessionKey);
+      this.clients.set(sessionKey, client);
+      for (const fn of this.binders) fn(client);
     }
     return this.clients.get(sessionKey);
+  },
+  byId(sessionId) {
+    const row = getDb().prepare("SELECT * FROM whatsapp_sessions WHERE id = ?").get(Number(sessionId));
+    if (!row) return null;
+    return this.get(row.session_key);
   },
   primary() {
     return this.get("default");

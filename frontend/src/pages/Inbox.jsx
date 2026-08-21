@@ -3,7 +3,7 @@ import { api } from "../api.js";
 import { useApp } from "../store.jsx";
 
 export function InboxPage() {
-  const { pushToast } = useApp();
+  const { pushToast, wa } = useApp();
   const [convos, setConvos] = useState([]);
   const [active, setActive] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -19,7 +19,7 @@ export function InboxPage() {
   useEffect(() => {
     load().catch(() => {});
     api.quickReplies().then((d) => setQuicks(d.items || [])).catch(() => {});
-  }, []);
+  }, [wa.account?.id]);
 
   async function open(c) {
     setActive(c);

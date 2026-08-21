@@ -158,6 +158,20 @@ label { display: block; font-size: 13px; margin: 0 0 6px; color: var(--muted); }
 .modal { background: var(--surface); border-radius: 20px; padding: 22px; width: min(560px, 100%); border: 1px solid var(--line); }
 .login-wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; }
 .login-card { width: min(420px, 100%); }
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.account-card {
+  text-align: right;
+  cursor: pointer;
+}
+.account-card.selected {
+  outline: 2px solid var(--primary);
+}
+.account-card b { display: block; margin-top: 8px; }
 .toast {
   position: fixed; bottom: 20px; left: 20px; background: var(--surface); border: 1px solid var(--line);
   padding: 12px 16px; border-radius: 14px; box-shadow: var(--shadow); z-index: 60;

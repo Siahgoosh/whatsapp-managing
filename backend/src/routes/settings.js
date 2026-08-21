@@ -7,6 +7,7 @@ import { getDb, getSetting, setSetting } from "../../../database/index.js";
 import { config } from "../../../config/index.js";
 import { aiService } from "../../../services/ai/AiService.js";
 import { auditLog } from "../utils/logger.js";
+import { assignUserAccount, listAccounts } from "../../../services/accounts/AccountService.js";
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
@@ -65,9 +66,14 @@ settingsRouter.get(
   requireRole("admin"),
   asyncHandler(async (req, res) => {
     const users = getDb()
-      .prepare("SELECT id, username, display_name, role, active, created_at, last_login_at FROM users")
+      .prepare(
+        `SELECT u.id, u.username, u.display_name, u.role, u.active, u.created_at, u.last_login_at,
+                u.whatsapp_session_id, s.label AS account_label, s.phone AS account_phone
+         FROM users u
+         LEFT JOIN whatsapp_sessions s ON s.id = u.whatsapp_session_id`
+      )
       .all();
-    res.json({ users });
+    res.json({ users, accounts: listAccounts() });
   })
 );
 
@@ -75,7 +81,8 @@ const userSchema = z.object({
   username: z.string().min(3).max(32),
   password: z.string().min(8).max(128),
   displayName: z.string().max(80).optional(),
-  role: z.enum(["admin", "operator"])
+  role: z.enum(["admin", "operator"]),
+  whatsappSessionId: z.coerce.number().optional()
 });
 
 settingsRouter.post(
@@ -89,11 +96,25 @@ settingsRouter.post(
       const info = getDb()
         .prepare("INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)")
         .run(parsed.data.username, hash, parsed.data.displayName || parsed.data.username, parsed.data.role);
+      const id = Number(info.lastInsertRowid);
+      if (parsed.data.whatsappSessionId) assignUserAccount(id, parsed.data.whatsappSessionId);
       auditLog(req.user.id, "user_create", parsed.data.username, req.ip);
-      res.status(201).json({ id: Number(info.lastInsertRowid) });
+      res.status(201).json({ id });
     } catch {
       throw new HttpError(409, "نام کاربری تکراری است");
     }
+  })
+);
+
+settingsRouter.patch(
+  "/users/:id",
+  requireRole("admin"),
+  asyncHandler(async (req, res) => {
+    const parsed = z.object({ whatsappSessionId: z.coerce.number() }).safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "اکانت واتساپ نامعتبر است");
+    const result = assignUserAccount(req.params.id, parsed.data.whatsappSessionId);
+    auditLog(req.user.id, "user_assign_account", `user=${req.params.id} session=${parsed.data.whatsappSessionId}`, req.ip);
+    res.json(result);
   })
 );
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
-import { statusFa, useApp } from "../store.jsx";
+import { accountLabel, statusFa, useApp } from "../store.jsx";
 
 export function Dashboard() {
   const { wa } = useApp();
@@ -9,7 +9,7 @@ export function Dashboard() {
 
   useEffect(() => {
     api.dashboard().then(setData).catch(() => {});
-  }, []);
+  }, [wa.account?.id]);
 
   const s = data?.stats || {};
   return (
@@ -17,13 +17,17 @@ export function Dashboard() {
       <div className="topbar">
         <div>
           <h2>داشبورد</h2>
-          <p className="muted">وضعیت حساب، کمپین‌ها و فعالیت‌های اخیر</p>
+          <p className="muted">وضعیت اکانت فعال، کمپین‌ها و فعالیت‌های اخیر</p>
         </div>
         <Link className="btn" to="/campaigns/new">
           کمپین جدید
         </Link>
       </div>
       <div className="grid stats">
+        <div className="card stat">
+          اکانت فعال
+          <b>{accountLabel(wa.account)}</b>
+        </div>
         <div className="card stat">
           وضعیت واتساپ
           <b>{statusFa(wa.status)}</b>

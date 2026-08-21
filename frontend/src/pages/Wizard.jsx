@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { activityAgo } from "../format.js";
-import { useApp } from "../store.jsx";
+import { accountLabel, useApp } from "../store.jsx";
 
 const STEPS = [
   "نام کمپین",
@@ -16,7 +16,7 @@ const STEPS = [
 ];
 
 export function WizardPage() {
-  const { pushToast } = useApp();
+  const { pushToast, wa } = useApp();
   const nav = useNavigate();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("تبلیغ فایل‌های جدید املاک فرتاک");
@@ -57,7 +57,7 @@ export function WizardPage() {
   useEffect(() => {
     loadGroups();
     api.settings().then((d) => setLimits(d.limits || limits)).catch(() => {});
-  }, []);
+  }, [wa.account?.id]);
 
   useEffect(() => {
     if (step === 3) loadGroups();
@@ -103,7 +103,7 @@ export function WizardPage() {
       <div className="topbar">
         <div>
           <h2>ساخت کمپین</h2>
-          <p className="muted">فقط برای گروه‌هایی که عضو هستید و اجازه ارسال دارید.</p>
+          <p className="muted">ارسال با {accountLabel(wa.account)} — فقط گروه‌هایی که همین شماره عضو آن‌هاست.</p>
         </div>
       </div>
       <div className="wizard">
@@ -112,6 +112,7 @@ export function WizardPage() {
         ))}
       </div>
       <div className="card" style={{ marginTop: 16 }}>
+        <div className="badge ok">ارسال با {accountLabel(wa.account)}</div>
         {step === 0 && (
           <>
             <label>نام کمپین</label>

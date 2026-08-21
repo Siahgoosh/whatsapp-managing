@@ -25,10 +25,20 @@ export const api = {
     request("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   logout: () => request("/api/auth/logout", { method: "POST", body: "{}" }),
   dashboard: () => request("/api/dashboard"),
-  waStatus: () => request("/api/whatsapp/status"),
-  waQr: () => request("/api/whatsapp/qr"),
-  waConnect: () => request("/api/whatsapp/connect", { method: "POST", body: "{}" }),
-  waLogout: () => request("/api/whatsapp/logout", { method: "POST", body: "{}" }),
+  waStatus: (sessionId) =>
+    request(`/api/whatsapp/status${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`),
+  waQr: (sessionId) =>
+    request(`/api/whatsapp/qr${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`),
+  waConnect: (sessionId) =>
+    request("/api/whatsapp/connect", { method: "POST", body: JSON.stringify(sessionId ? { sessionId } : {}) }),
+  waLogout: (sessionId) =>
+    request("/api/whatsapp/logout", { method: "POST", body: JSON.stringify(sessionId ? { sessionId } : {}) }),
+  waAccounts: () => request("/api/whatsapp/accounts"),
+  waCreateAccount: (label) => request("/api/whatsapp/accounts", { method: "POST", body: JSON.stringify({ label }) }),
+  waRenameAccount: (id, label) =>
+    request(`/api/whatsapp/accounts/${id}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+  waSetActive: (sessionId) =>
+    request("/api/whatsapp/active", { method: "POST", body: JSON.stringify({ sessionId }) }),
   groups: (q = "") => request(`/api/groups?q=${encodeURIComponent(q)}`),
   syncGroups: () => request("/api/groups/sync", { method: "POST", body: "{}" }),
   patchGroup: (id, body) => request(`/api/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -60,6 +70,8 @@ export const api = {
   saveSettings: (body) => request("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
   users: () => request("/api/settings/users"),
   createUser: (body) => request("/api/settings/users", { method: "POST", body: JSON.stringify(body) }),
+  assignUserAccount: (id, whatsappSessionId) =>
+    request(`/api/settings/users/${id}`, { method: "PATCH", body: JSON.stringify({ whatsappSessionId }) }),
   audit: () => request("/api/settings/audit"),
   backup: () => request("/api/settings/backup"),
   notifications: () => request("/api/notifications"),

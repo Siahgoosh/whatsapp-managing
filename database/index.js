@@ -46,6 +46,13 @@ function migrateSchema(database) {
   addColumn(database, "groups", "found_by", "TEXT");
   addColumn(database, "groups", "found_at", "TEXT");
   addColumn(database, "groups", "source_group_name", "TEXT");
+  addColumn(database, "users", "whatsapp_session_id", "INTEGER");
+  const def = database.prepare("SELECT id FROM whatsapp_sessions WHERE session_key = 'default'").get();
+  if (def) {
+    database
+      .prepare("UPDATE users SET whatsapp_session_id = COALESCE(whatsapp_session_id, ?) WHERE whatsapp_session_id IS NULL")
+      .run(def.id);
+  }
   database.exec(
     "CREATE INDEX IF NOT EXISTS idx_groups_permission ON groups(advertising_permission, membership_status)"
   );

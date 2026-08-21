@@ -4,7 +4,7 @@ import { activityAgo } from "../format.js";
 import { useApp } from "../store.jsx";
 
 export function GroupsPage() {
-  const { pushToast } = useApp();
+  const { pushToast, wa } = useApp();
   const [groups, setGroups] = useState([]);
   const [q, setQ] = useState("");
   const [onlyAdmin, setOnlyAdmin] = useState(false);
@@ -18,7 +18,7 @@ export function GroupsPage() {
 
   useEffect(() => {
     load().catch((e) => pushToast(e.message));
-  }, [q]);
+  }, [q, wa.account?.id]);
 
   const visible = useMemo(
     () => groups.filter((g) => (!onlyAdmin || g.is_admin) && (!onlyFav || g.is_favorite)),
