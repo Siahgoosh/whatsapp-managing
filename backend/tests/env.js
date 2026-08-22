@@ -1,0 +1,13 @@
+process.env.NODE_ENV = "test";
+process.env.PORT = "9454";
+process.env.ADMIN_USERNAME = "admin";
+process.env.ADMIN_PASSWORD = "testpass123";
+process.env.SESSION_SECRET = "test-session-secret-please-change";
+process.env.MIN_DELAY_SECONDS = "0";
+process.env.DEFAULT_DELAY_SECONDS = "0";
+process.env.RETRY_WAIT_SECONDS = "0";
+process.env.MAX_CONSECUTIVE_FAILURES = "5";
+process.env.AI_ENABLED = "false";
+process.env.TELEGRAM_ENABLED = "false";
+process.env.FINDER_MAX_PAGES_PER_SCAN = "0";
+process.env.FINDER_TIMEOUT_MS = "500";

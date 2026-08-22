@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    container_name: whatsapp-campaign-manager
+    restart: unless-stopped
+    ports:
+      - "9454:9454"
+    env_file:
+      - .env
+    environment:
+      PORT: 9454
+    volumes:
+      - ./database:/app/database
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./sessions:/app/sessions
+    healthcheck:
+      test: ["CMD", "node", "scripts/healthcheck.js"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 25s
