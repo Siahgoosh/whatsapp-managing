@@ -391,28 +391,42 @@ export class GroupLinkMonitor {
     }
   }
 
-  rowsForShare(ids) {
+  openableByIds(ids, max) {
     const unique = [...new Set((ids || []).map(Number).filter(Boolean))];
     if (!unique.length) throw new HttpError(400, "لینکی انتخاب نشده است");
-    if (unique.length > config.maxShareLinks) {
-      throw new HttpError(400, `حداکثر ${config.maxShareLinks} لینک در هر ارسال`);
+    if (unique.length > max) {
+      throw new HttpError(400, `حداکثر ${max} لینک در این درخواست`);
     }
-    const placeholders = unique.map(() => "?").join(",");
-    const rows = getDb()
-      .prepare(
-        `SELECT * FROM discovered_group_links
-         WHERE id IN (${placeholders})
-           AND validation_status IN ('valid', 'unavailable', 'unknown')
-           AND normalized_url LIKE 'https://chat.whatsapp.com/%'`
-      )
-      .all(...unique);
+    const found = new Map();
+    const step = 300;
+    for (let i = 0; i < unique.length; i += step) {
+      const part = unique.slice(i, i + step);
+      const placeholders = part.map(() => "?").join(",");
+      const rows = getDb()
+        .prepare(
+          `SELECT * FROM discovered_group_links
+           WHERE id IN (${placeholders})
+             AND validation_status IN ('valid', 'unavailable', 'unknown')
+             AND normalized_url LIKE 'https://chat.whatsapp.com/%'`
+        )
+        .all(...part);
+      for (const row of rows) found.set(row.id, row);
+    }
+    const rows = unique.map((id) => found.get(id)).filter(Boolean);
     if (!rows.length) throw new HttpError(400, "لینک قابل عضویت انتخاب نشده است");
     return rows;
   }
 
+  rowsForShare(ids) {
+    return this.openableByIds(ids, config.maxShareLinks);
+  }
+
   exportText(ids) {
-    const rows = Array.isArray(ids) ? this.rowsForShare(ids) : this.list({ suggested: true });
+    const rows = Array.isArray(ids) ? this.openableByIds(ids, config.maxCopyLinks) : this.list({ suggested: true });
     if (!rows.length) throw new HttpError(400, "لینک معتبری برای کپی نیست");
+    if (!Array.isArray(ids) && rows.length > config.maxCopyLinks) {
+      throw new HttpError(400, `حداکثر ${config.maxCopyLinks} لینک در هر کپی`);
+    }
     return { text: formatShareLinks(rows), count: rows.length, urls: rows.map((r) => r.normalized_url) };
   }
 
@@ -425,7 +439,10 @@ export class GroupLinkMonitor {
       throw new HttpError(400, "تعداد تأیید با لینک‌های انتخاب‌شده یکی نیست", "confirm_mismatch");
     }
     if (!wa?.sendChat) throw new HttpError(409, "واتساپ متصل نیست");
-    const chunks = chunkShareRows(rows, config.shareMessageMaxChars);
+    const chunks = chunkShareRows(rows, {
+      maxChars: config.shareMessageMaxChars,
+      maxRows: config.maxShareLinksPerMessage
+    });
     const sessionId = this.session(wa?.sessionKey).id;
     const delayMs = config.isTest ? 0 : config.minDelaySeconds * 1000;
     for (let i = 0; i < chunks.length; i++) {

@@ -25,14 +25,22 @@ export function formatShareLinks(rows, { startIndex = 1, part, parts } = {}) {
   return lines.join("\n").trim();
 }
 
-export function chunkShareRows(rows, maxChars = 3500) {
+export function chunkShareRows(rows, maxCharsOrOpts = 3500, maxRows = 180) {
   const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
   if (!list.length) return [];
+  const maxChars =
+    typeof maxCharsOrOpts === "object" && maxCharsOrOpts
+      ? Number(maxCharsOrOpts.maxChars) || 3500
+      : Number(maxCharsOrOpts) || 3500;
+  const rowCap =
+    typeof maxCharsOrOpts === "object" && maxCharsOrOpts
+      ? Number(maxCharsOrOpts.maxRows) || 180
+      : Number(maxRows) || 180;
   const slices = [];
   let i = 0;
   while (i < list.length) {
     let take = 1;
-    while (i + take < list.length) {
+    while (i + take < list.length && take < rowCap) {
       const trial = formatShareLinks(list.slice(i, i + take + 1), { startIndex: i + 1 });
       if (trial.length > maxChars) break;
       take += 1;

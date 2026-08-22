@@ -75,7 +75,9 @@ export const config = {
   outreachFollowUpHours: envInt("OUTREACH_FOLLOW_UP_HOURS", 24),
   outreachMinDelaySeconds: minDelay,
   maxWhatsAppAccounts: envInt("MAX_WHATSAPP_ACCOUNTS", 8),
-  maxShareLinks: envInt("MAX_SHARE_LINKS", 200),
+  maxCopyLinks: envInt("MAX_COPY_LINKS", 2000),
+  maxShareLinks: envInt("MAX_SHARE_LINKS", 2000),
+  maxShareLinksPerMessage: envInt("MAX_SHARE_LINKS_PER_MESSAGE", 180),
   shareMessageMaxChars: envInt("SHARE_MESSAGE_MAX_CHARS", 3500),
   paths: {
     data: path.join(rootDir, "database"),

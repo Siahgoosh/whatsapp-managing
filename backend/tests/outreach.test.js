@@ -290,6 +290,17 @@ test("share chunks keep all 57 links instead of capping at 40", () => {
     chunks.reduce((n, c) => n + c.rows.length, 0),
     57
   );
+  const many = Array.from({ length: 400 }, (_, i) => ({
+    group_name: `گروه ${i + 1}`,
+    normalized_url: `https://chat.whatsapp.com/Many${String(i + 1).padStart(4, "0")}ABCDEF`
+  }));
+  const split = chunkShareRows(many, { maxChars: 20000, maxRows: 180 });
+  assert.ok(split.length >= 3);
+  assert.ok(split.every((c) => c.rows.length <= 180));
+  assert.equal(
+    split.reduce((n, c) => n + c.rows.length, 0),
+    400
+  );
 });
 
 test("scan member groups finds inbox invite links and copy/share stay consented", async () => {
@@ -390,6 +401,50 @@ test("share sends all 57 links to one contact instead of stopping at 40", async 
   assert.ok(share.body.messages >= 1);
   const urls = sent.flatMap((m) => m.text.match(/https:\/\/chat\.whatsapp\.com\/ShareAll\d+XXXXXX/g) || []);
   assert.equal(urls.length, 57);
+  assert.equal(new Set(sent.map((m) => m.chatId)).size, 1);
+});
+
+test("copy and share keep all 400 links and WhatsApp messages stay under 180 links", async () => {
+  const { app } = setupApp();
+  const { sessionId, ids } = seedGroups(1);
+  const insert = getDb().prepare(
+    `INSERT INTO discovered_group_links
+       (session_id, invite_url, normalized_url, source_group_id, source_group_name,
+        found_at, found_by, validation_status, http_status, group_name, join_status, city)
+     VALUES (?, ?, ?, ?, 'گروه منبع', datetime('now'), 'member_group_scan', 'valid', 200, ?, 'not_joined', 'سایر')`
+  );
+  const linkIds = [];
+  for (let i = 1; i <= 400; i++) {
+    const url = `https://chat.whatsapp.com/Bulk${String(i).padStart(4, "0")}XXXXXX`;
+    const info = insert.run(sessionId, url, url, ids[0], `گروه ${i}`);
+    linkIds.push(Number(info.lastInsertRowid));
+  }
+  const sent = [];
+  const wa = mockWhatsApp();
+  wa.sendChat = async ({ chatId, text }) => {
+    sent.push({ chatId, text });
+    return { ok: true };
+  };
+  const { agent, csrf } = await login(app);
+  const copy = await agent.post("/api/discovery/copy-text").set("X-CSRF-Token", csrf).send({ ids: linkIds });
+  assert.equal(copy.status, 200);
+  assert.equal(copy.body.count, 400);
+  assert.match(copy.body.text, /گروه 400/);
+  const share = await agent.post("/api/discovery/share").set("X-CSRF-Token", csrf).send({
+    ids: linkIds,
+    to: "09121234567",
+    confirm: true,
+    confirmCount: 400
+  });
+  assert.equal(share.status, 200);
+  assert.equal(share.body.count, 400);
+  assert.ok(share.body.messages >= 3);
+  const urls = sent.flatMap((m) => m.text.match(/https:\/\/chat\.whatsapp\.com\/Bulk\d+XXXXXX/g) || []);
+  assert.equal(urls.length, 400);
+  for (const message of sent) {
+    const count = (message.text.match(/https:\/\/chat\.whatsapp\.com\/Bulk/g) || []).length;
+    assert.ok(count <= 180);
+  }
   assert.equal(new Set(sent.map((m) => m.chatId)).size, 1);
 });
 

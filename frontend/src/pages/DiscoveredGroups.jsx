@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { io } from "socket.io-client";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
+import { copyText, downloadText } from "../copyText.js";
 import { statusFa, useApp } from "../store.jsx";
 
 const JOIN_LABEL = {
@@ -24,6 +25,8 @@ export function DiscoveredGroups() {
   const [shareOpen, setShareOpen] = useState(false);
   const [shareTo, setShareTo] = useState("");
   const [sharePreview, setSharePreview] = useState("");
+  const [shareCount, setShareCount] = useState(0);
+  const [shareBusy, setShareBusy] = useState(false);
 
   async function load() {
     const p = new URLSearchParams();
@@ -80,22 +83,42 @@ export function DiscoveredGroups() {
     }
   }
 
+  function openableFrom(list) {
+    return list.filter((r) => r.openable !== false && r.validation_status !== "invalid");
+  }
+
   function shareableIds() {
     const source = selectedRows.length ? selectedRows : rows;
-    return source
-      .filter((r) => r.openable !== false && r.validation_status !== "invalid")
-      .map((r) => r.id);
+    return openableFrom(source).map((r) => r.id);
+  }
+
+  async function fetchCopyText(ids) {
+    if (Array.isArray(ids) && !ids.length) {
+      throw new Error("ابتدا لینک‌ها را انتخاب کنید");
+    }
+    return api.discoveryCopy(ids);
   }
 
   async function copyLinks(ids) {
-    if (Array.isArray(ids) && !ids.length) {
-      pushToast("ابتدا لینک‌ها را انتخاب کنید");
-      return;
-    }
     try {
-      const r = await api.discoveryCopy(ids);
-      await navigator.clipboard.writeText(r.text);
-      pushToast(`${r.count} لینک کپی شد — می‌توانید همان متن را در واتساپ برای کسی بفرستید`);
+      const r = await fetchCopyText(ids);
+      const ok = await copyText(r.text);
+      if (ok) {
+        pushToast(`${r.count} لینک کپی شد`);
+        return;
+      }
+      downloadText(r.text, `whatsapp-group-links-${r.count}.txt`);
+      pushToast(`${r.count} لینک در فایل متنی ذخیره شد (کلیپ‌بورد در این مرورگر در دسترس نبود)`);
+    } catch (e) {
+      pushToast(e.message);
+    }
+  }
+
+  async function downloadLinks(ids) {
+    try {
+      const r = await fetchCopyText(ids);
+      downloadText(r.text, `whatsapp-group-links-${r.count}.txt`);
+      pushToast(`${r.count} لینک دانلود شد`);
     } catch (e) {
       pushToast(e.message);
     }
@@ -104,8 +127,9 @@ export function DiscoveredGroups() {
   async function openShare() {
     const ids = shareableIds();
     try {
-      const r = await api.discoveryCopy(ids);
-      setSharePreview(r.text);
+      const r = await fetchCopyText(ids);
+      setShareCount(r.count);
+      setSharePreview(r.text.length > 3500 ? `${r.text.slice(0, 3500)}\n\n…` : r.text);
       setShareOpen(true);
     } catch (e) {
       pushToast(e.message);
@@ -155,8 +179,9 @@ export function DiscoveredGroups() {
           </label>
           <button className="btn secondary" onClick={() => setPicked(new Set(rows.map((r) => r.id)))}>انتخاب همه</button>
           <button className="btn secondary" onClick={() => setPicked(new Set())}>هیچکدام</button>
-          <button className="btn secondary" onClick={() => copyLinks(selectedRows.map((r) => r.id))}>کپی لینک‌های انتخاب‌شده</button>
-          <button className="btn secondary" onClick={() => copyLinks()}>کپی همه پیشنهادها</button>
+          <button className="btn secondary" onClick={() => copyLinks(openableFrom(selectedRows).map((r) => r.id))}>کپی انتخاب‌شده</button>
+          <button className="btn secondary" onClick={() => copyLinks(openableFrom(rows).map((r) => r.id))}>کپی همه لینک‌ها</button>
+          <button className="btn secondary" onClick={() => downloadLinks(openableFrom(selectedRows.length ? selectedRows : rows).map((r) => r.id))}>دانلود فایل متنی</button>
           <button className="btn" onClick={openShare}>ارسال یکجا در واتساپ</button>
           <span className="badge">{picked.size} انتخاب‌شده</span>
         </div>
@@ -275,34 +300,38 @@ export function DiscoveredGroups() {
         <div className="modal-back" onClick={() => setShareOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: "min(640px, 100%)" }}>
             <h3>ارسال یکجای لینک‌ها در واتساپ</h3>
-            <p className="muted">فقط به یک مخاطب، با تأیید شما. اگر تعداد لینک‌ها زیاد باشد در چند پیام پشت‌سرهم برای همان نفر فرستاده می‌شود. ارسال انبوه به افراد مختلف انجام نمی‌شود.</p>
+            <p className="muted">
+              {shareCount} لینک برای یک مخاطب فرستاده می‌شود. واتساپ بیشتر از حدود ۱۸۰ لینک در هر پیام را خوب قبول نمی‌کند؛ اگر تعداد زیاد باشد چند پیام پشت‌سرهم برای همان نفر می‌رود. ارسال انبوه به افراد مختلف نیست.
+            </p>
             <label>شماره مخاطب (مثال 0912…)</label>
             <input className="input" value={shareTo} onChange={(e) => setShareTo(e.target.value)} placeholder="09121234567" />
-            <label style={{ marginTop: 10 }}>
-              پیش‌نمایش پیام ({shareableIds().length} لینک)
-            </label>
-            <textarea className="input" value={sharePreview} onChange={(e) => setSharePreview(e.target.value)} />
+            <label style={{ marginTop: 10 }}>پیش‌نمایش (شروع متن)</label>
+            <textarea className="input" value={sharePreview} readOnly />
             <div className="row" style={{ marginTop: 12, justifyContent: "flex-end" }}>
               <button className="btn secondary" onClick={() => setShareOpen(false)}>Cancel</button>
               <button
                 className="btn"
+                disabled={shareBusy}
                 onClick={async () => {
                   const ids = shareableIds();
+                  setShareBusy(true);
                   try {
-                    await api.discoveryShare({
+                    const r = await api.discoveryShare({
                       ids,
                       to: shareTo,
                       confirm: true,
                       confirmCount: ids.length
                     });
-                    pushToast(`${ids.length} لینک ارسال شد`);
+                    pushToast(`${r.count} لینک در ${r.messages || 1} پیام برای همان مخاطب ارسال شد`);
                     setShareOpen(false);
                   } catch (e) {
                     pushToast(e.message);
+                  } finally {
+                    setShareBusy(false);
                   }
                 }}
               >
-                تأیید و ارسال
+                {shareBusy ? "در حال ارسال..." : "تأیید و ارسال"}
               </button>
             </div>
           </div>
